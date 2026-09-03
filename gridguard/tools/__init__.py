@@ -7,6 +7,7 @@ Import all tools from here to keep the agent definition clean.
 """
 
 from gridguard.tools.grid_snapshot import get_grid_snapshot
+from gridguard.tools.forecast import forecast_demand_xgboost
 from gridguard.tools.runbook import retrieve_runbook
 from gridguard.tools.risk_assessor import assess_risk
 from gridguard.tools.mitigation import generate_mitigation_steps
@@ -16,6 +17,7 @@ from gridguard.tools.audit import record_audit_event
 
 __all__ = [
     "get_grid_snapshot",
+    "forecast_demand_xgboost",
     "retrieve_runbook",
     "assess_risk",
     "generate_mitigation_steps",

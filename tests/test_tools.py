@@ -340,3 +340,65 @@ class TestRecordAuditEvent:
         actions = [r["action"] for r in records]
         assert "ACTION_0" in actions
         assert "ACTION_2" in actions
+
+
+# ── forecast_demand_xgboost ───────────────────────────────────────────────────
+
+class TestForecastDemandXGBoost:
+    def test_forecast_returns_expected_fields(self):
+        from gridguard.tools.forecast import forecast_demand_xgboost
+        result = forecast_demand_xgboost(region="ISNE", available_capacity_mw=25000.0, horizon_hours=24)
+        assert result["region"] == "ISNE"
+        assert result["forecast_horizon_hours"] == 24
+        assert result["predicted_peak_mw"] > 0
+        assert result["predicted_mean_mw"] > 0
+        assert result["available_capacity_mw"] == 25000.0
+        assert "reserve_margin_mw" in result
+        assert "reserve_margin_pct" in result
+        assert "high_risk_hours" in result
+        assert result["forecast_risk_level"] in ("NORMAL", "WATCH", "ELEVATED", "CRITICAL")
+        assert result["is_synthetic"] is True
+        assert "synthetic" in result["safety_notice"].lower()
+        assert "model_metadata" in result
+        assert result["model_metadata"]["feature_count"] == 19
+        assert len(result["hourly_forecast"]) == 24
+
+    def test_forecast_horizon_custom(self):
+        from gridguard.tools.forecast import forecast_demand_xgboost
+        result = forecast_demand_xgboost(region="PJM-EAST", available_capacity_mw=30000.0, horizon_hours=12)
+        assert result["forecast_horizon_hours"] == 12
+        assert len(result["hourly_forecast"]) == 12
+
+    def test_demand_shock_increases_peak(self):
+        from gridguard.tools.forecast import forecast_demand_xgboost
+        base = forecast_demand_xgboost(region="ISNE", available_capacity_mw=25000.0, demand_shock_pct=0.0)
+        shocked = forecast_demand_xgboost(region="ISNE", available_capacity_mw=25000.0, demand_shock_pct=15.0)
+        assert shocked["predicted_peak_mw"] > base["predicted_peak_mw"]
+
+    def test_missing_model_raises_model_load_error(self):
+        from gridguard.tools.forecast import forecast_demand_xgboost, ModelLoadError
+        with pytest.raises(ModelLoadError) as excinfo:
+            forecast_demand_xgboost(
+                region="ISNE",
+                available_capacity_mw=25000.0,
+                model_path="nonexistent_model.json",
+            )
+        assert "model artifact not found" in str(excinfo.value).lower()
+
+    def test_assess_risk_consumes_forecast(self):
+        from gridguard.tools.risk_assessor import assess_risk
+        result = assess_risk(
+            event_type="SEVERE_WEATHER",
+            region="ISNE",
+            demand_mw=20000.0,
+            capacity_mw=25000.0,
+            contingency_reserve_mw=1500.0,
+            forecast_peak_mw=24800.0,
+            forecast_reserve_margin_pct=0.8,
+            high_risk_hours=3,
+        )
+        assert result["forecast_peak_mw"] == 24800.0
+        assert result["forecast_reserve_margin_pct"] == 0.8
+        assert "forecast_impact_explanation" in result
+        assert "ELEVATED FORECAST IMPACT" in result["forecast_impact_explanation"]
+        assert result["severity_score"] >= 4

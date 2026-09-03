@@ -14,7 +14,7 @@
 
 Grid and utility operations teams spend significant time repeatedly triaging risk signals, checking runbooks, creating mitigation recommendations, and preparing work orders. **GridGuard Strands Operations Autopilot** is an autonomous-but-human-governed agent that handles this repetitive structured work — and only escalates when an operator decision is needed.
 
-The agent ingests a simulated grid-risk event (severe weather, rising demand, equipment risk, or outage warning), runs a structured seven-step workflow through Strands tool functions, and surfaces every decision in a clean Streamlit dashboard — including a **mandatory human approval gate** before any action becomes active.
+The agent ingests a simulated grid-risk event (severe weather, rising demand, equipment risk, or outage warning), runs a structured eight-step workflow through Strands tool functions, and surfaces every decision in a clean Streamlit dashboard — including a **mandatory human approval gate** before any action becomes active.
 
 > ⚠️ **Safety Boundary**: This system operates entirely on synthetic/simulated data. It does not connect to, monitor, or control any real electric grid, generation asset, transmission infrastructure, or customer load. All drafted actions are recommendations; a human operator makes every final decision.
 
@@ -28,15 +28,16 @@ flowchart TD
     UI -->|run event| WF[GridGuard Agent\nStrands SDK]
 
     WF --> T1["① get_grid_snapshot\n📡 Regional telemetry"]
-    T1  --> T2["② retrieve_runbook\n📖 Operating procedure"]
-    T2  --> T3["③ assess_risk\n📊 Severity 1–5 · Priority P1–P5"]
-    T3  --> T4["④ generate_mitigation_steps\n🛠️ Ordered action plan"]
-    T4  --> T5["⑤ draft_work_order\n📋 Structured DRAFT document"]
-    T5  --> GATE{"⑥ request_human_approval\n⚠️ MANDATORY HITL GATE"}
+    T1  --> T2["② forecast_demand_xgboost\n📈 24h ML Demand & Reserve Forecast"]
+    T2  --> T3["③ retrieve_runbook\n📖 Operating procedure"]
+    T3  --> T4["④ assess_risk\n📊 Severity 1–5 · Telemetry + Forecast"]
+    T4  --> T5["⑤ generate_mitigation_steps\n🛠️ Ordered action plan"]
+    T5  --> T6["⑥ draft_work_order\n📋 Structured DRAFT document"]
+    T6  --> GATE{"⑦ request_human_approval\n⚠️ MANDATORY HITL GATE"}
 
-    GATE -->|"Operator: APPROVE / REJECT"| T6["⑦ record_audit_event\n📝 Immutable JSONL record"]
+    GATE -->|"Operator: APPROVE / REJECT"| T7["⑧ record_audit_event\n📝 Immutable JSONL record"]
     UI  -->|"Approve / Reject buttons"| GATE
-    T6  --> AUDIT[(audit_log.jsonl\nAppend-only · SHA-256 hashed)]
+    T7  --> AUDIT[(audit_log.jsonl\nAppend-only · SHA-256 hashed)]
 
     classDef human fill:#1e3a5f,color:#fff,stroke:#4a90d9
     classDef gate  fill:#7f1d1d,color:#fff,stroke:#dc2626
@@ -88,7 +89,7 @@ Open http://localhost:8501 — select a scenario, click **Run Agent Workflow**, 
 pytest tests/ -v --tb=short
 ```
 
-Expected: **all tests pass** with zero cloud credentials.
+Expected: **all 56 tests pass** with zero cloud credentials.
 
 ---
 
@@ -97,25 +98,27 @@ Expected: **all tests pass** with zero cloud credentials.
 | # | Step | Tool | Description |
 |---|------|------|-------------|
 | 1 | Grid Snapshot | `get_grid_snapshot` | Retrieves current demand, capacity, reserve, frequency for the region |
-| 2 | Runbook | `retrieve_runbook` | Fetches the relevant standard operating procedure |
-| 3 | Risk Assessment | `assess_risk` | Scores severity 1–5, assigns urgency and priority tier using deterministic rules |
-| 4 | Mitigation Plan | `generate_mitigation_steps` | Generates ordered, role-assigned action steps from the runbook catalogue |
-| 5 | Work Order | `draft_work_order` | Formats a structured DRAFT work order document |
-| 6 | ⚠️ **HITL Gate** | `request_human_approval` | **Mandatory** — suspends until operator Approves or Rejects |
-| 7 | Audit Record | `record_audit_event` | Writes SHA-256-hashed immutable record to `data/audit_log.jsonl` |
+| 2 | Demand Forecast | `forecast_demand_xgboost` | 24-hour ML forecast: peak MW, reserve margin %, high-risk hours |
+| 3 | Runbook | `retrieve_runbook` | Fetches the relevant standard operating procedure |
+| 4 | Risk Assessment | `assess_risk` | Scores severity 1–5 using current telemetry and XGBoost forecast impact |
+| 5 | Mitigation Plan | `generate_mitigation_steps` | Generates ordered, role-assigned action steps from the runbook catalogue |
+| 6 | Work Order | `draft_work_order` | Formats a structured DRAFT work order document |
+| 7 | ⚠️ **HITL Gate** | `request_human_approval` | **Mandatory** — suspends until operator Approves or Rejects |
+| 8 | Audit Record | `record_audit_event` | Writes SHA-256-hashed immutable record to `data/audit_log.jsonl` |
 
 ---
 
 ## Dashboard Sections
 
 1. **Ingested Event** — event title, description, ID, severity badge
-2. **Workflow Timeline** — all 7 steps with status badges and elapsed time
-3. **Risk Assessment** — severity gauge, load factor, reserve margin metrics
-4. **Grid Snapshot** — regional telemetry at-a-glance
-5. **Mitigation Plan** — ordered step cards with responsible roles and timeframes
-6. **Work Order Draft** — structured document with Approve / Reject HITL buttons
-7. **Operational Runbook** — full runbook for the event type
-8. **Audit Trail** — paginated immutable event log with hash display
+2. **Workflow Timeline** — all 8 steps with status badges and elapsed time
+3. **Risk Assessment** — severity gauge, load factor, reserve margin, and explicit XGBoost forecast impact
+4. **XGBoost Forecast** — peak demand, available capacity, projected reserve margin, and hourly trajectory chart
+5. **Grid Snapshot** — regional telemetry at-a-glance
+6. **Mitigation Plan** — ordered step cards with responsible roles and timeframes
+7. **Work Order Draft** — structured document with Approve / Reject HITL buttons
+8. **Operational Runbook** — full runbook for the event type
+9. **Audit Trail** — paginated immutable event log with SHA-256 hash display
 
 ---
 
@@ -141,8 +144,11 @@ GridGuard-Strands-Autopilot/
 │   ├── data/
 │   │   ├── synthetic_events.py # Canonical event generator
 │   │   └── runbooks.py         # Static runbook store
+│   ├── models/
+│   │   └── xgboost_demand_model.json # Serialized XGBoost model artifact
 │   └── tools/
 │       ├── grid_snapshot.py    # get_grid_snapshot()
+│       ├── forecast.py         # forecast_demand_xgboost()  ← ML forecaster
 │       ├── runbook.py          # retrieve_runbook()
 │       ├── risk_assessor.py    # assess_risk()
 │       ├── mitigation.py       # generate_mitigation_steps()
@@ -155,9 +161,11 @@ GridGuard-Strands-Autopilot/
 │   └── run_demo.py             # Rich CLI demo runner
 ├── tests/
 │   ├── conftest.py
-│   ├── test_tools.py           # 25+ unit tests
+│   ├── test_tools.py           # 30+ unit tests (including XGBoost)
 │   ├── test_workflow.py        # Integration tests (all 4 scenarios)
 │   └── test_audit.py           # Audit trail tests
+├── .github/workflows/
+│   └── ci.yml                  # GitHub Actions CI (Python 3.11 / 3.12)
 ├── .env.example
 ├── pyproject.toml
 └── README.md
@@ -213,7 +221,18 @@ The live agent uses the same tool functions — the LLM orchestrates them autono
 
 ## Prior Work Disclosure
 
-This project was built during the Agents for Humans Hackathon submission period. It is a new Strands-based autonomous workflow inspired by domain concepts from my earlier GridGuard AI project. The Strands orchestration, tool layer, background workflow, human-approval controls, interface, tests, and hackathon-specific implementation were developed for this submission.
+This project was built during the AWS Agents for Humans Hackathon submission period.
+
+- **Originating Prior Work**: The XGBoost demand forecasting pipeline (19 autoregressive/cyclical features, recursive multi-step forecasting, and hyperparameter configuration) and synthetic grid-domain assumptions originate from the author's earlier GridGuard AI exploration.
+- **New Work Built for This Hackathon**: The entire agentic system and AWS-ready architecture are genuinely new and built specifically for this submission:
+  - Strands Agents SDK integration with typed `@tool` registry
+  - 8-step autonomous-but-human-governed workflow
+  - Deterministic zero-token mock workflow engine
+  - Non-skippable Human-in-the-Loop (HITL) approval gate
+  - Streamlit operations dashboard with forecast trajectory chart and risk explanation
+  - Append-only SHA-256 tamper-evident JSONL audit trail
+  - GitHub Actions multi-version CI pipeline (Python 3.11 / 3.12)
+  - 56-test automated test suite (100% passing offline without credentials)
 
 ---
 

@@ -26,19 +26,37 @@ class TestMockWorkflow:
         assert "approval_request" in result
 
     @pytest.mark.parametrize("scenario", SCENARIOS)
-    def test_all_seven_steps_present(self, scenario):
+    def test_all_eight_steps_present(self, scenario):
         from gridguard.agent import run_mock_workflow
         result = run_mock_workflow(scenario)
         steps = result["steps"]
-        assert len(steps) == 7
+        assert len(steps) == 8
         tool_names = [s["tool_name"] for s in steps]
         assert "get_grid_snapshot" in tool_names
+        assert "forecast_demand_xgboost" in tool_names
         assert "retrieve_runbook" in tool_names
         assert "assess_risk" in tool_names
         assert "generate_mitigation_steps" in tool_names
         assert "draft_work_order" in tool_names
         assert "request_human_approval" in tool_names
         assert "record_audit_event" in tool_names
+
+    def test_xgboost_forecast_runs_second_and_risk_consumes_output(self):
+        from gridguard.agent import run_mock_workflow
+        result = run_mock_workflow("SEVERE_WEATHER")
+        steps = result["steps"]
+        assert steps[1]["tool_name"] == "forecast_demand_xgboost"
+        assert steps[1]["status"] == "DONE"
+        assert "forecast" in result
+        forecast = result["forecast"]
+        assert forecast["predicted_peak_mw"] > 0
+        assert forecast["forecast_horizon_hours"] == 24
+        # Verify risk assessment consumed forecast peak and reserve margin
+        assessment = result["assessment"]
+        assert assessment["forecast_peak_mw"] == forecast["predicted_peak_mw"]
+        assert assessment["forecast_reserve_margin_pct"] == forecast["reserve_margin_pct"]
+        assert "forecast_impact_explanation" in assessment
+        assert len(assessment["forecast_impact_explanation"]) > 0
 
     @pytest.mark.parametrize("scenario", SCENARIOS)
     def test_all_steps_complete_without_error(self, scenario):
@@ -106,6 +124,7 @@ class TestMockWorkflow:
         def callback(step):
             called.append(step.tool_name)
         run_mock_workflow("HIGH_DEMAND", on_step=callback)
-        assert len(called) == 7
+        assert len(called) == 8
         assert "get_grid_snapshot" in called
+        assert "forecast_demand_xgboost" in called
         assert "record_audit_event" in called

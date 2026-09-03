@@ -20,6 +20,11 @@ from pathlib import Path
 # Make the project root importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -29,7 +34,7 @@ from gridguard.agent import run_mock_workflow
 from gridguard.data.synthetic_events import get_scenario_names
 from gridguard.tools.human_approval import resolve_approval
 
-console = Console()
+console = Console(legacy_windows=False)
 
 
 def print_step_table(steps: list[dict]) -> None:
@@ -99,6 +104,21 @@ def main() -> int:
         title="[bold]📥 Ingested Event[/]",
         border_style="steel_blue",
     ))
+
+    # ── Forecast ──────────────────────────────────────────────────────────────
+    forecast = result.get("forecast")
+    if forecast:
+        console.print(Panel(
+            f"Predicted Peak: [bold]{forecast['predicted_peak_mw']:,.0f} MW[/]  |  "
+            f"Available Capacity: [bold]{forecast['available_capacity_mw']:,.0f} MW[/]\n"
+            f"Projected Reserve: [bold]{forecast['reserve_margin_pct']}%[/] ({forecast['reserve_margin_mw']:,.0f} MW)  |  "
+            f"Horizon: [bold]{forecast['forecast_horizon_hours']}h[/]\n"
+            f"Risk Category: [bold]{forecast['forecast_risk_level']}[/]  |  "
+            f"High-Risk Hours: [bold]{forecast['high_risk_hours']}[/]\n\n"
+            f"{forecast['headline']}",
+            title="[bold]📈 XGBoost Demand Forecast (Synthetic Demo)[/]",
+            border_style="cyan",
+        ))
 
     # ── Workflow timeline ──────────────────────────────────────────────────────
     console.print("\n[bold]📋 Workflow Timeline[/]")

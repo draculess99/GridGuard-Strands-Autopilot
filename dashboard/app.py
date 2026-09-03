@@ -14,6 +14,7 @@ from typing import Any
 # Make the project root importable when running from anywhere
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import pandas as pd
 import streamlit as st
 
 from gridguard.agent import run_mock_workflow
@@ -328,6 +329,7 @@ plan = result["plan"]
 work_order = result["work_order"]
 approval = result["approval_request"]
 snapshot = result["snapshot"]
+forecast = result.get("forecast", {})
 runbook = result["runbook"]
 steps_data = result["steps"]
 
@@ -363,7 +365,7 @@ col_timeline, col_detail = st.columns([1, 2], gap="large")
 
 with col_timeline:
     st.markdown('<div class="section-header">Workflow Timeline</div>', unsafe_allow_html=True)
-    step_icons = ["📡", "📖", "📊", "🛠️", "📋", "🔐", "📝"]
+    step_icons = ["📡", "📈", "📖", "📊", "🛠️", "📋", "🔐", "📝"]
     for i, step in enumerate(steps_data):
         icon = step_icons[i] if i < len(step_icons) else "•"
         status = step["status"]
@@ -404,8 +406,8 @@ with col_timeline:
 # ── Right: Tabs ───────────────────────────────────────────────────────────────
 
 with col_detail:
-    tab_risk, tab_grid, tab_plan, tab_wo, tab_runbook = st.tabs(
-        ["📊 Risk", "📡 Grid Snapshot", "🛠️ Mitigation Plan", "📋 Work Order", "📖 Runbook"]
+    tab_risk, tab_forecast, tab_grid, tab_plan, tab_wo, tab_runbook = st.tabs(
+        ["📊 Risk", "📈 XGBoost Forecast", "📡 Grid Snapshot", "🛠️ Mitigation Plan", "📋 Work Order", "📖 Runbook"]
     )
 
     # ── Risk Tab ──────────────────────────────────────────────────────────────
@@ -428,22 +430,96 @@ with col_detail:
             unsafe_allow_html=True,
         )
 
+        # Explicit XGBoost Forecast impact card
+        if assessment.get("forecast_impact_explanation"):
+            st.markdown(
+                f'<div class="gg-card" style="border-left:4px solid {sev_color};background:#161b22;margin-bottom:1rem;">'
+                f'<div class="section-header">XGBoost Forecast Impact on Severity</div>'
+                f'<div style="font-size:0.88rem;color:#e6edf3;">{assessment["forecast_impact_explanation"]}</div>'
+                f'<div style="font-size:0.75rem;color:#8b949e;margin-top:0.5rem;">'
+                f'Forecasted Peak Demand: <strong>{assessment.get("forecast_peak_mw", 0):,.0f} MW</strong> &nbsp;|&nbsp; '
+                f'Reserve Margin: <strong>{assessment.get("forecast_reserve_margin_pct", 0)}%</strong> &nbsp;|&nbsp; '
+                f'High-Risk Hours (≥92% load): <strong>{assessment.get("forecast_high_risk_hours", 0)} hrs</strong>'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
         # Metrics row
         m1, m2, m3 = st.columns(3)
         m1.metric("Priority Tier", assessment["priority_tier"])
-        m2.metric("Reserve Margin", f"{assessment['reserve_margin_pct']}%")
-        m3.metric("Load Factor", f"{assessment['load_factor_pct']}%")
+        m2.metric("Telemetry Reserve Margin", f"{assessment['reserve_margin_pct']}%")
+        m3.metric("Current Load Factor", f"{assessment['load_factor_pct']}%")
 
         m4, m5 = st.columns(2)
         m4.metric("Contingency Reserve", f"{assessment['contingency_reserve_mw']:,.0f} MW")
-        m5.metric("Immediate Action?", "Yes" if assessment["requires_immediate_action"] else "No")
+        m5.metric("Immediate Action Required?", "Yes" if assessment["requires_immediate_action"] else "No")
 
-        if assessment["affected_assets"]:
+        if assessment.get("affected_assets"):
             st.markdown(
                 f'<div style="margin-top:0.5rem;font-size:0.82rem;color:#8b949e;">'
                 f'Affected assets: <code>{", ".join(assessment["affected_assets"])}</code></div>',
                 unsafe_allow_html=True,
             )
+
+    # ── XGBoost Forecast Tab ──────────────────────────────────────────────────
+    with tab_forecast:
+        st.markdown('<div class="section-header">24-Hour Demand Forecast — XGBoost ML Engine</div>', unsafe_allow_html=True)
+        if forecast:
+            fc_risk = forecast.get("forecast_risk_level", "NORMAL")
+            fc_color = _severity_color("CRITICAL" if fc_risk == "CRITICAL" else ("HIGH" if fc_risk == "ELEVATED" else ("MEDIUM" if fc_risk == "WATCH" else "LOW")))
+
+            st.markdown(
+                f'<div class="gg-card" style="border-left:4px solid {fc_color};">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+                f'<div>'
+                f'<span style="font-size:1.1rem;font-weight:600;color:#e6edf3;">XGBoost — Synthetic Demo Forecast</span><br>'
+                f'<span style="font-size:0.8rem;color:#8b949e;">{forecast.get("headline", "")}</span>'
+                f'</div>'
+                f'<span class="badge" style="background:{fc_color};color:#fff;font-size:0.85rem;padding:0.3rem 0.8rem;">{fc_risk}</span>'
+                f'</div>'
+                f'<div style="margin-top:0.6rem;font-size:0.82rem;color:#8b949e;">{forecast.get("recommendation", "")}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Metrics
+            f1, f2, f3 = st.columns(3)
+            f1.metric("Predicted Peak Demand", f"{forecast['predicted_peak_mw']:,.0f} MW")
+            f2.metric("Available Capacity", f"{forecast['available_capacity_mw']:,.0f} MW")
+            f3.metric("Projected Reserve Margin", f"{forecast['reserve_margin_pct']}%", delta=f"{forecast['reserve_margin_mw']:,.0f} MW")
+
+            f4, f5, f6 = st.columns(3)
+            f4.metric("Forecast Horizon", f"{forecast['forecast_horizon_hours']} Hours")
+            f5.metric("Mean Demand", f"{forecast['predicted_mean_mw']:,.0f} MW")
+            f6.metric("High-Risk Hours (≥92%)", f"{forecast['high_risk_hours']} hrs")
+
+            # Hourly trajectory line chart
+            hourly_list = forecast.get("hourly_forecast", [])
+            if hourly_list:
+                st.markdown('<div class="section-header" style="margin-top:1rem;">Hourly Demand vs Generation Capacity</div>', unsafe_allow_html=True)
+                chart_df = pd.DataFrame({
+                    "Hour": [r["hour"] for r in hourly_list],
+                    "Forecast Demand (MW)": [r["forecast_mw"] for r in hourly_list],
+                    "Capacity Limit (MW)": [forecast["available_capacity_mw"] for _ in hourly_list],
+                }).set_index("Hour")
+                st.line_chart(chart_df)
+
+            # Model metadata & limitations
+            meta = forecast.get("model_metadata", {})
+            st.markdown(
+                f'<div class="gg-card" style="font-size:0.75rem;color:#6e7681;margin-top:1rem;">'
+                f'<strong>Model:</strong> {meta.get("model_name")} ({meta.get("model_version")}) &nbsp;|&nbsp; '
+                f'<strong>Algorithm:</strong> <code>{meta.get("algorithm")}</code> &nbsp;|&nbsp; '
+                f'<strong>Features:</strong> {meta.get("feature_count")} features (lags, rolling stats, cyclical time, temperature)<br>'
+                f'<strong>Training Pipeline:</strong> {meta.get("training_source")}<br>'
+                f'<strong>Notice:</strong> {forecast.get("safety_notice")}<br>'
+                f'<strong>Limitations:</strong> {forecast.get("limitations")}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info("No forecast data available in this workflow run.")
 
     # ── Grid Snapshot Tab ─────────────────────────────────────────────────────
     with tab_grid:

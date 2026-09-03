@@ -30,6 +30,10 @@ dependencies = [
     "anthropic>=0.28.0",
     "rich>=13.7.0",
     "click>=8.1.7",
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "scikit-learn>=1.5.0",
+    "xgboost>=3.0.0",
 ]
 
 [project.optional-dependencies]

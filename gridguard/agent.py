@@ -28,6 +28,7 @@ from gridguard.logger import get_logger
 from gridguard.tools import (
     assess_risk,
     draft_work_order,
+    forecast_demand_xgboost,
     generate_mitigation_steps,
     get_grid_snapshot,
     record_audit_event,
@@ -46,13 +47,14 @@ operational runbooks, generating mitigation recommendations, and preparing
 work orders for human review.
 
 Your workflow for every grid-risk event:
-1. Call get_grid_snapshot to retrieve the current grid state.
-2. Call retrieve_runbook to get the relevant operating procedure.
-3. Call assess_risk to score severity, urgency, and priority.
-4. Call generate_mitigation_steps to produce an ordered action plan.
-5. Call draft_work_order to format a structured work order.
-6. Call request_human_approval — MANDATORY before any action becomes active.
-7. Call record_audit_event to log each significant step.
+1. Call get_grid_snapshot to retrieve current grid telemetry and state.
+2. Call forecast_demand_xgboost to run a 24-hour demand forecast and reserve margin projection.
+3. Call retrieve_runbook to get the relevant operating procedure.
+4. Call assess_risk to score severity, urgency, and priority using telemetry and the forecast.
+5. Call generate_mitigation_steps to produce an ordered action plan.
+6. Call draft_work_order to format a structured work order.
+7. Call request_human_approval — MANDATORY before any action becomes active.
+8. Call record_audit_event to log each significant step.
 
 Critical constraints:
 - You operate on SYNTHETIC / SIMULATED data only. You do NOT control any
@@ -117,6 +119,7 @@ def build_live_agent():
         system_prompt=SYSTEM_PROMPT,
         tools=[
             get_grid_snapshot,
+            forecast_demand_xgboost,
             retrieve_runbook,
             assess_risk,
             generate_mitigation_steps,
@@ -241,27 +244,54 @@ def run_mock_workflow(
         event_type=event_type,
     )
 
-    # ── Step 2: Retrieve Runbook ──────────────────────────────────────────────
+    # ── Step 2: Demand Forecast (XGBoost) ─────────────────────────────────────
+    temp_delta = 0.0
+    demand_shock = 0.0
+    if event_type == "SEVERE_WEATHER":
+        temp_delta = -18.0
+        demand_shock = 8.0
+    elif event_type == "HIGH_DEMAND":
+        temp_delta = 14.0
+        demand_shock = 10.0
+    elif event_type == "EQUIPMENT_RISK":
+        demand_shock = 3.0
+    elif event_type == "OUTAGE_WARNING":
+        demand_shock = 2.0
+
+    forecast = _run_step(
+        WorkflowStep("Demand Forecast", "forecast_demand_xgboost"),
+        forecast_demand_xgboost,
+        region=region,
+        available_capacity_mw=float(snapshot["available_capacity_mw"]),
+        horizon_hours=24,
+        temperature_delta_f=temp_delta,
+        demand_shock_pct=demand_shock,
+    )
+
+    # ── Step 3: Retrieve Runbook ──────────────────────────────────────────────
     runbook = _run_step(
         WorkflowStep("Retrieve Runbook", "retrieve_runbook"),
         retrieve_runbook,
         event_type=event_type,
     )
 
-    # ── Step 3: Assess Risk ───────────────────────────────────────────────────
+    # ── Step 4: Assess Risk ───────────────────────────────────────────────────
     assessment = _run_step(
         WorkflowStep("Risk Assessment", "assess_risk"),
         assess_risk,
         event_type=event_type,
         region=region,
-        demand_mw=float(event.get("demand_mw", 20000)),
-        capacity_mw=float(event.get("capacity_mw", 25000)),
-        contingency_reserve_mw=float(event.get("contingency_reserve_mw", 1500)),
+        demand_mw=float(event.get("demand_mw", snapshot["demand_mw"])),
+        capacity_mw=float(event.get("capacity_mw", snapshot["available_capacity_mw"])),
+        contingency_reserve_mw=float(event.get("contingency_reserve_mw", snapshot["contingency_reserve_mw"])),
         severity_hint=int(event.get("severity_hint", 3)),
         affected_assets=event.get("affected_assets", []),
+        forecast_peak_mw=float(forecast["predicted_peak_mw"]),
+        forecast_reserve_margin_pct=float(forecast["reserve_margin_pct"]),
+        high_risk_hours=int(forecast["high_risk_hours"]),
     )
 
-    # ── Step 4: Generate Mitigation ───────────────────────────────────────────
+    # ── Step 5: Generate Mitigation ───────────────────────────────────────────
     plan = _run_step(
         WorkflowStep("Mitigation Plan", "generate_mitigation_steps"),
         generate_mitigation_steps,
@@ -272,7 +302,7 @@ def run_mock_workflow(
         affected_assets=event.get("affected_assets", []),
     )
 
-    # ── Step 5: Draft Work Order ──────────────────────────────────────────────
+    # ── Step 6: Draft Work Order ──────────────────────────────────────────────
     work_order = _run_step(
         WorkflowStep("Draft Work Order", "draft_work_order"),
         draft_work_order,
@@ -287,7 +317,7 @@ def run_mock_workflow(
         notes=f"Auto-drafted by GridGuard Autopilot. Severity score: {assessment['severity_score']}/5.",
     )
 
-    # ── Step 6: Request Human Approval ────────────────────────────────────────
+    # ── Step 7: Request Human Approval ────────────────────────────────────────
     approval_request = _run_step(
         WorkflowStep("Human Approval Gate", "request_human_approval"),
         request_human_approval,
@@ -305,7 +335,7 @@ def run_mock_workflow(
         ),
     )
 
-    # ── Step 7: Audit — Workflow Initiated ────────────────────────────────────
+    # ── Step 8: Audit — Workflow Initiated ────────────────────────────────────
     audit_rec = _run_step(
         WorkflowStep("Audit Record", "record_audit_event"),
         record_audit_event,
@@ -331,6 +361,7 @@ def run_mock_workflow(
         "event": event,
         "steps": [s.to_dict() for s in steps],
         "snapshot": snapshot,
+        "forecast": forecast,
         "runbook": runbook,
         "assessment": assessment,
         "plan": plan,
