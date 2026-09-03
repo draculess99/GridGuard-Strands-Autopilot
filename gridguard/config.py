@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str = Field(default="")
     AWS_SESSION_TOKEN: str = Field(default="")
     BEDROCK_MODEL_ID: str = Field(
-        default="anthropic.claude-3-5-haiku-20241022-v1:0"
+        default="anthropic.claude-haiku-4-5-20251001-v1:0",
+        description="Bedrock model ID (default: active, cost-conscious Claude Haiku 4.5).",
     )
 
     # ── Live Mode Safeguards ──────────────────────────────────────────────

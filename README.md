@@ -180,7 +180,7 @@ GridGuard-Strands-Autopilot/
 | `MOCK_MODE` | `true` | `true` = full demo, zero cloud calls. `false` = live Bedrock briefing mode. |
 | `STRANDS_PROVIDER` | `bedrock` | Active provider: `bedrock` or `anthropic` |
 | `AWS_REGION` | `us-east-1` | AWS region for Amazon Bedrock |
-| `BEDROCK_MODEL_ID` | `anthropic.claude-3-5-haiku-20241022-v1:0` | Small, cost-conscious Bedrock model |
+| `BEDROCK_MODEL_ID` | `anthropic.claude-haiku-4-5-20251001-v1:0` | Active, cost-conscious Bedrock model (fully configurable) |
 | `LIVE_RUN_LIMIT` | `5` | Process-level ceiling on live calls to prevent runaway spend |
 | `LIVE_MAX_OUTPUT_TOKENS` | `600` | Concise output token cap on model briefings |
 | `LIVE_TEMPERATURE` | `0.2` | Sampling temperature for deterministic briefing |
@@ -203,7 +203,7 @@ When `MOCK_MODE=false`, GridGuard uses a real **Strands Agent** backed by **Amaz
 6. **Graceful Fallback**: If Bedrock is throttled, unavailable, or credentials fail, the workflow continues deterministically without bypassing human approval or corrupting audit integrity.
 
 ### Configuring Your First Live Run
-1. Ensure model access is enabled for `anthropic.claude-3-5-haiku-20241022-v1:0` in your AWS region (e.g. `us-east-1` or `us-west-2`).
+1. Ensure model access is enabled for `anthropic.claude-haiku-4-5-20251001-v1:0` (or your chosen model) in your AWS region (e.g. `us-east-1` or `us-west-2`).
 2. Create your `.env` file:
    ```bash
    MOCK_MODE=false
@@ -211,6 +211,8 @@ When `MOCK_MODE=false`, GridGuard uses a real **Strands Agent** backed by **Amaz
    AWS_REGION=us-east-1
    AWS_ACCESS_KEY_ID=AKIA...
    AWS_SECRET_ACCESS_KEY=...
+   # Default active cost-conscious model, or specify any active Bedrock model
+   BEDROCK_MODEL_ID=anthropic.claude-haiku-4-5-20251001-v1:0
    LIVE_RUN_LIMIT=5
    ```
 3. Run the dashboard or CLI demo:

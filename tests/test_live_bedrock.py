@@ -244,3 +244,33 @@ class TestSafeguardsAndCostControl:
         data = json.loads(formatted)
         assert "secretKey" not in data["msg"]
         assert "[REDACTED]" in data["msg"]
+
+
+class TestBedrockModelConfiguration:
+    """Verify active model defaults, configurable model-ID, and Strands compatibility."""
+
+    def test_default_model_id_is_active_claude_haiku_4_5(self):
+        assert settings.BEDROCK_MODEL_ID == "anthropic.claude-haiku-4-5-20251001-v1:0"
+
+    def test_model_id_is_configurable_via_env(self, monkeypatch):
+        from gridguard.config import Settings
+        monkeypatch.setenv("BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+        custom_settings = Settings()
+        assert custom_settings.BEDROCK_MODEL_ID == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+    @patch("boto3.Session")
+    def test_strands_bedrock_model_supports_claude_haiku_4_5(self, mock_boto):
+        from strands.models.bedrock import BedrockModel
+
+        mock_client = MagicMock()
+        mock_client.meta.region_name = "us-east-1"
+        mock_boto.return_value.client.return_value = mock_client
+
+        model = BedrockModel(
+            model_id="anthropic.claude-haiku-4-5-20251001-v1:0",
+            region_name="us-east-1",
+        )
+        assert model.config["model_id"] == "anthropic.claude-haiku-4-5-20251001-v1:0"
+
+        req = model.format_request(messages=[{"role": "user", "content": [{"text": "Hello"}]}])
+        assert req["modelId"] == "anthropic.claude-haiku-4-5-20251001-v1:0"
