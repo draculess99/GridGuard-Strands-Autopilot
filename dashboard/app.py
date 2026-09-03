@@ -8,8 +8,6 @@ Launch with:
 from __future__ import annotations
 
 import sys
-import threading
-import time
 from pathlib import Path
 from typing import Any
 
@@ -193,7 +191,6 @@ st.markdown(
 def _init_state() -> None:
     defaults = {
         "workflow_result": None,
-        "running": False,
         "run_error": None,
         "approval_token": None,
         "approval_status": "NONE",  # NONE | PENDING | APPROVED | REJECTED
@@ -260,7 +257,6 @@ with st.sidebar:
         "▶ Run Agent Workflow",
         use_container_width=True,
         type="primary",
-        disabled=st.session_state.running,
     )
 
     st.divider()
@@ -289,37 +285,19 @@ st.markdown(
 )
 st.markdown("---")
 
-# ── Trigger workflow in background thread ────────────────────────────────────
+# ── Execute workflow synchronously ───────────────────────────────────────────
 
-if run_btn and not st.session_state.running:
-    st.session_state.running = True
-    st.session_state.workflow_result = None
+if run_btn:
     st.session_state.run_error = None
-    st.session_state.approval_token = None
-    st.session_state.approval_status = "NONE"
-
-    def _background_run(event_type: str) -> None:
+    with st.spinner("Agent is running the workflow… (MOCK_MODE — no API calls)"):
         try:
-            result = run_mock_workflow(event_type)
+            result = run_mock_workflow(scenario)
             st.session_state.workflow_result = result
             st.session_state.approval_token = result["approval_request"]["approval_token"]
             st.session_state.approval_status = "PENDING"
         except Exception as exc:
             st.session_state.run_error = str(exc)
-        finally:
-            st.session_state.running = False
-
-    t = threading.Thread(target=_background_run, args=(scenario,), daemon=True)
-    t.start()
-    time.sleep(0.3)
-    st.rerun()
-
-# ── Running spinner ───────────────────────────────────────────────────────────
-
-if st.session_state.running:
-    with st.spinner("Agent is running the workflow… (MOCK_MODE — no API calls)"):
-        time.sleep(1)
-    st.rerun()
+            st.session_state.workflow_result = None
 
 # ── Error display ─────────────────────────────────────────────────────────────
 
@@ -328,7 +306,7 @@ if st.session_state.run_error:
 
 # ── Empty state ───────────────────────────────────────────────────────────────
 
-if st.session_state.workflow_result is None and not st.session_state.running:
+if st.session_state.workflow_result is None:
     st.markdown(
         '<div class="gg-card" style="text-align:center;padding:3rem;">'
         '<div style="font-size:3rem;">⚡</div>'
