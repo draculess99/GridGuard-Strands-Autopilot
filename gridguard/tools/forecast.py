@@ -258,7 +258,10 @@ def forecast_demand_xgboost(
     region_multipliers: dict[str, float] = {
         "ISNE": 1.15,
         "PJM-EAST": 1.45,
-        "MISO-C": 1.25,
+        "MISO-CENTRAL": 1.0,
+        "MISO-C": 1.0,
+        "ERCOT-NORTH": 0.55,
+        "CAISO-SOUTH": 1.10,
         "NYISO-J": 0.85,
     }
     multiplier = region_multipliers.get(region, 1.0)

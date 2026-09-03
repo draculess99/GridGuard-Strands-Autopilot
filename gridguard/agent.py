@@ -245,18 +245,21 @@ def run_mock_workflow(
     )
 
     # ── Step 2: Demand Forecast (XGBoost) ─────────────────────────────────────
-    temp_delta = 0.0
-    demand_shock = 0.0
-    if event_type == "SEVERE_WEATHER":
-        temp_delta = -18.0
-        demand_shock = 8.0
-    elif event_type == "HIGH_DEMAND":
-        temp_delta = 14.0
-        demand_shock = 10.0
-    elif event_type == "EQUIPMENT_RISK":
-        demand_shock = 3.0
-    elif event_type == "OUTAGE_WARNING":
-        demand_shock = 2.0
+    weather_info = event.get("weather", {})
+    temp_delta = float(event.get("temperature_delta_f", weather_info.get("temperature_delta_f", 0.0)))
+    demand_shock = float(event.get("demand_shock_pct", weather_info.get("demand_shock_pct", 0.0)))
+
+    if not temp_delta and not demand_shock:
+        if event_type == "SEVERE_WEATHER":
+            temp_delta = -36.0
+            demand_shock = 14.0
+        elif event_type == "HIGH_DEMAND":
+            temp_delta = 14.0
+            demand_shock = 10.0
+        elif event_type == "EQUIPMENT_RISK":
+            demand_shock = 0.0
+        elif event_type == "OUTAGE_WARNING":
+            demand_shock = 0.0
 
     forecast = _run_step(
         WorkflowStep("Demand Forecast", "forecast_demand_xgboost"),

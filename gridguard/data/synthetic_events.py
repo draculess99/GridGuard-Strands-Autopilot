@@ -22,23 +22,27 @@ REGIONS = ["ISNE", "PJM-EAST", "MISO-CENTRAL", "ERCOT-NORTH", "CAISO-SOUTH"]
 _SCENARIOS: dict[str, dict[str, Any]] = {
     "SEVERE_WEATHER": {
         "event_type": "SEVERE_WEATHER",
-        "title": "Hurricane-Track Ice Storm Approaching Service Territory",
+        "title": "Arctic Ice Storm & Generation Constraint Stress Condition",
         "description": (
-            "NWS has issued a Winter Storm Warning. Forecast models show "
-            "a 72-hour ice accumulation of 0.5–1.2 inches across the northern "
-            "transmission corridor. Historical demand surge during comparable "
-            "events is +18 % above seasonal baseline."
+            "SYNTHETIC DEMO STRESS SCENARIO: NWS has issued an Extreme Winter Ice Storm Warning "
+            "with freezing rain and sub-zero wind chills (-36°F temperature anomaly driving +14% heating surge). "
+            "Heavy ice accumulation has tripped 345 kV corridor line LINE-N12, and water intake icing has "
+            "derated regional thermal generation by 4,500 MW, reducing available capacity to 24,000 MW. "
+            "Operating contingency reserves have dropped to 650 MW (below the 700 MW emergency threshold)."
         ),
         "region": "ISNE",
         "severity_hint": 4,
-        "demand_mw": 24_800,
-        "capacity_mw": 28_500,
-        "contingency_reserve_mw": 1_200,
+        "demand_mw": 23_100,
+        "capacity_mw": 24_000,
+        "contingency_reserve_mw": 650,
         "weather": {
-            "condition": "ICE_STORM",
-            "temperature_f": 26,
-            "wind_mph": 38,
-            "ice_accumulation_in": 0.8,
+            "condition": "EXTREME_ICE_STORM",
+            "temperature_f": 14,
+            "wind_mph": 42,
+            "ice_accumulation_in": 1.1,
+            "temperature_delta_f": -36.0,
+            "demand_shock_pct": 14.0,
+            "capacity_derate_mw": 4_500,
         },
         "affected_assets": ["TX-N-447", "LINE-N12", "SS-BURLINGTON-3"],
         "source": "SYNTHETIC_DEMO",

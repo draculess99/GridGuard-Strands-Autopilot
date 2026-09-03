@@ -402,3 +402,18 @@ class TestForecastDemandXGBoost:
         assert "forecast_impact_explanation" in result
         assert "ELEVATED FORECAST IMPACT" in result["forecast_impact_explanation"]
         assert result["severity_score"] >= 4
+
+    def test_severe_weather_cold_stress_constrains_reserve_margin(self):
+        from gridguard.tools.forecast import forecast_demand_xgboost
+        result = forecast_demand_xgboost(
+            region="ISNE",
+            available_capacity_mw=24000.0,
+            horizon_hours=24,
+            temperature_delta_f=-36.0,
+            demand_shock_pct=14.0,
+        )
+        assert result["predicted_peak_mw"] > 23000.0
+        assert result["reserve_margin_pct"] < 5.0
+        assert result["forecast_risk_level"] == "CRITICAL"
+        assert result["high_risk_hours"] >= 4
+        assert "severely challenges" in result["headline"].lower()

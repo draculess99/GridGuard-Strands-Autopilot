@@ -105,6 +105,36 @@ def get_grid_snapshot(
         },
     )
 
+    # Documented synthetic SEVERE_WEATHER stress condition:
+    # Heavy icing forces a 4,500 MW generation derate and compresses contingency reserves below 700 MW
+    if event_type == "SEVERE_WEATHER":
+        if region == "ISNE":
+            snapshot = {
+                "demand_mw": 23_100,
+                "installed_capacity_mw": 28_500,
+                "available_capacity_mw": 24_000,
+                "contingency_reserve_mw": 650,
+                "reserve_margin_pct": round((24_000 - 23_100) / 24_000 * 100, 1),
+                "frequency_hz": 59.95,
+                "interchange_mw": -1_500,
+                "voltage_profile": "DEGRADED",
+                "alert_level": "EMERGENCY_WATCH",
+                "storm_stress_condition": (
+                    "SYNTHETIC DEMO STRESS SCENARIO: 4,500 MW thermal generation derated "
+                    "from intake icing; LINE-N12 tripped by heavy ice accretion."
+                ),
+            }
+        else:
+            base_cap = float(snapshot.get("available_capacity_mw", 25_000))
+            derated_cap = round(base_cap * 0.85)
+            snapshot = dict(snapshot)
+            snapshot["available_capacity_mw"] = derated_cap
+            snapshot["contingency_reserve_mw"] = 650
+            snapshot["reserve_margin_pct"] = round(
+                (derated_cap - float(snapshot["demand_mw"])) / derated_cap * 100, 1
+            )
+            snapshot["alert_level"] = "EMERGENCY_WATCH"
+
     result = {
         "region": region,
         "event_type": event_type,

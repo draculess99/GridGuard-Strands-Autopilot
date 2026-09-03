@@ -44,11 +44,12 @@ _URGENCY_HEADERS: dict[str, str] = {
 _MITIGATION_CATALOGUE: dict[str, list[dict[str, Any]]] = {
     "SEVERE_WEATHER": [
         {"step": 1, "action": "Activate Storm Level staffing and open Storm Bridge line.", "timeframe": "Immediate", "responsible": "Shift Manager"},
-        {"step": 2, "action": "Assess contingency reserve — if < 1,500 MW initiate emergency capacity procurement.", "timeframe": "< 30 min", "responsible": "System Operator"},
+        {"step": 2, "action": "Assess contingency reserve — if < 1,500 MW initiate emergency capacity procurement and call up fast-start reserves.", "timeframe": "< 30 min", "responsible": "System Operator"},
         {"step": 3, "action": "Defer or reschedule all non-critical planned outages in storm path.", "timeframe": "< 1 hour", "responsible": "Outage Coordinator"},
         {"step": 4, "action": "Pre-position field restoration crews at strategic depots and confirm mutual aid agreements.", "timeframe": "T-12 hours", "responsible": "Field Ops Manager"},
-        {"step": 5, "action": "Issue Demand Response notification to enrolled participants.", "timeframe": "T-6 hours", "responsible": "Customer Operations"},
-        {"step": 6, "action": "Issue 2-hourly situation reports to all stakeholders until event clears.", "timeframe": "Ongoing", "responsible": "Operations Centre"},
+        {"step": 5, "action": "Dispatch emergency patrol crews to inspect icing and structural loading on line LINE-N12 and substation SS-BURLINGTON-3.", "timeframe": "< 2 hours", "responsible": "Field Ops Supervisor"},
+        {"step": 6, "action": "Issue Demand Response notification to enrolled participants to initiate peak load curtailment.", "timeframe": "T-6 hours", "responsible": "Customer Operations"},
+        {"step": 7, "action": "Issue 2-hourly situation reports to all stakeholders until event clears.", "timeframe": "Ongoing", "responsible": "Operations Centre"},
     ],
     "HIGH_DEMAND": [
         {"step": 1, "action": "Verify SCADA telemetry against backup metering to confirm reserve deficiency.", "timeframe": "Immediate", "responsible": "System Operator"},

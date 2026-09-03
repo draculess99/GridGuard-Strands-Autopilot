@@ -58,6 +58,46 @@ class TestMockWorkflow:
         assert "forecast_impact_explanation" in assessment
         assert len(assessment["forecast_impact_explanation"]) > 0
 
+    def test_severe_weather_stress_condition_produces_critical_risk(self):
+        from gridguard.agent import run_mock_workflow
+        result = run_mock_workflow("SEVERE_WEATHER")
+        fc = result["forecast"]
+        assessment = result["assessment"]
+        plan = result["plan"]
+
+        # Constrained reserve margin from scenario inputs and XGBoost model output
+        assert fc["predicted_peak_mw"] > 23000.0
+        assert fc["available_capacity_mw"] <= 25000.0
+        assert fc["reserve_margin_pct"] < 5.0
+        assert fc["forecast_risk_level"] in ("CRITICAL", "ELEVATED")
+        assert fc["high_risk_hours"] >= 4
+
+        # Risk assessment reflects computed evidence
+        assert assessment["severity_score"] >= 4
+        assert assessment["severity_label"] in ("CRITICAL", "HIGH")
+        assert assessment["priority_tier"] in ("P1", "P2")
+        assert "CRITICAL FORECAST IMPACT" in assessment["forecast_impact_explanation"]
+
+        # Mitigation plan contains required operational actions
+        actions = " ".join(s["action"] for s in plan["steps"]).lower()
+        assert "reserve" in actions or "procurement" in actions
+        assert "crew" in actions or "restoration" in actions
+        assert "inspect" in actions or "patrol" in actions
+        assert "escalation" in actions or "notify" in actions
+
+    def test_normal_scenario_produces_healthy_reserve_margin(self):
+        from gridguard.agent import run_mock_workflow
+        result = run_mock_workflow("OUTAGE_WARNING")
+        fc = result["forecast"]
+        assessment = result["assessment"]
+
+        # Verifies healthy reserve behavior in a normal scenario
+        assert fc["forecast_risk_level"] == "NORMAL"
+        assert fc["reserve_margin_pct"] >= 15.0
+        assert fc["high_risk_hours"] == 0
+        assert assessment["severity_score"] <= 3
+        assert assessment["severity_label"] in ("LOW", "MEDIUM", "INFORMATIONAL")
+
     @pytest.mark.parametrize("scenario", SCENARIOS)
     def test_all_steps_complete_without_error(self, scenario):
         from gridguard.agent import run_mock_workflow

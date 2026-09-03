@@ -91,8 +91,9 @@ def assess_risk(
         if forecast_reserve_margin_pct < 0 or high_risk_hours >= 4:
             severity = min(5, raw_severity + 1)
             forecast_impact = (
-                f"CRITICAL FORECAST IMPACT: XGBoost projects negative reserve margin ({forecast_reserve_margin_pct}%) "
-                f"with {high_risk_hours} hours exceeding 92% capacity. Severity escalated from {raw_severity} to {severity}."
+                f"CRITICAL FORECAST IMPACT: XGBoost projects critically constrained reserve margin "
+                f"({forecast_reserve_margin_pct}%) with {high_risk_hours} hours exceeding 92% capacity. "
+                f"Severity escalated from {raw_severity} to {severity}."
             )
         elif forecast_reserve_margin_pct < 5 or high_risk_hours >= 2:
             severity = min(5, max(raw_severity, 4))
