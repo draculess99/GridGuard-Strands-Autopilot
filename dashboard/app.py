@@ -17,9 +17,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pandas as pd
 import streamlit as st
 
-from gridguard.agent import run_mock_workflow
+from gridguard.agent import run_mock_workflow, run_workflow
 from gridguard.config import settings
 from gridguard.data.synthetic_events import get_scenario_names
+from gridguard.safeguards import get_live_run_count
 from gridguard.tools.audit import read_audit_log
 from gridguard.tools.human_approval import get_pending_approval, resolve_approval
 
@@ -254,6 +255,33 @@ with st.sidebar:
     approver_name = st.text_input("Your name (for audit)", value="Shift Manager", key="approver_name_input")
 
     st.divider()
+
+    confirm_live = False
+    if not settings.MOCK_MODE:
+        st.markdown(
+            f'<div style="margin-bottom:0.75rem;padding:0.6rem;background:#2d1305;border:1px solid #7c2d12;border-radius:6px;font-size:0.75rem;color:#fdba74;">'
+            f'⚡ <strong>LIVE BEDROCK MODE ACTIVE</strong><br>'
+            f'Region: <code>{settings.AWS_REGION}</code><br>'
+            f'Model: <code>{settings.BEDROCK_MODEL_ID}</code><br>'
+            f'Live calls: <strong>{get_live_run_count()} / {settings.LIVE_RUN_LIMIT}</strong>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        confirm_live = st.checkbox(
+            "I confirm I want to call Amazon Bedrock",
+            value=False,
+            key="confirm_live_call",
+            help="Confirmation required before initiating a paid Amazon Bedrock API call.",
+        )
+    else:
+        st.markdown(
+            '<div style="margin-bottom:0.75rem;padding:0.5rem;background:#0d2818;border:1px solid #1e4620;border-radius:6px;font-size:0.75rem;color:#86efac;">'
+            '🛡️ <strong>MOCK_MODE: ON</strong> (Offline safe)<br>'
+            'Zero cloud API calls. Deterministic synthetic demo.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
     run_btn = st.button(
         "▶ Run Agent Workflow",
         use_container_width=True,
@@ -272,7 +300,7 @@ with st.sidebar:
 
     st.markdown(
         '<div style="margin-top:1rem;font-size:0.72rem;color:#6e7681;">'
-        f"MOCK_MODE: {'ON ✓' if settings.MOCK_MODE else 'OFF — live LLM'}"
+        f"MOCK_MODE: {'ON ✓ (zero cloud spend)' if settings.MOCK_MODE else 'OFF — Amazon Bedrock active'}"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -290,15 +318,26 @@ st.markdown("---")
 
 if run_btn:
     st.session_state.run_error = None
-    with st.spinner("Agent is running the workflow… (MOCK_MODE — no API calls)"):
-        try:
-            result = run_mock_workflow(scenario)
-            st.session_state.workflow_result = result
-            st.session_state.approval_token = result["approval_request"]["approval_token"]
-            st.session_state.approval_status = "PENDING"
-        except Exception as exc:
-            st.session_state.run_error = str(exc)
-            st.session_state.workflow_result = None
+    if not settings.MOCK_MODE and not confirm_live:
+        st.session_state.run_error = (
+            "Live Bedrock invocation cancelled: Please check 'I confirm I want to call Amazon Bedrock' "
+            "in the sidebar before initiating a paid cloud API call."
+        )
+    else:
+        spinner_msg = (
+            "Agent is running the workflow… (MOCK_MODE — no API calls)"
+            if settings.MOCK_MODE
+            else f"Agent is generating Bedrock Operator Briefing via Strands ({settings.BEDROCK_MODEL_ID})…"
+        )
+        with st.spinner(spinner_msg):
+            try:
+                result = run_workflow(scenario, mock_mode=settings.MOCK_MODE)
+                st.session_state.workflow_result = result
+                st.session_state.approval_token = result["approval_request"]["approval_token"]
+                st.session_state.approval_status = "PENDING"
+            except Exception as exc:
+                st.session_state.run_error = str(exc)
+                st.session_state.workflow_result = None
 
 # ── Error display ─────────────────────────────────────────────────────────────
 
@@ -406,9 +445,47 @@ with col_timeline:
 # ── Right: Tabs ───────────────────────────────────────────────────────────────
 
 with col_detail:
-    tab_risk, tab_forecast, tab_grid, tab_plan, tab_wo, tab_runbook = st.tabs(
-        ["📊 Risk", "📈 XGBoost Forecast", "📡 Grid Snapshot", "🛠️ Mitigation Plan", "📋 Work Order", "📖 Runbook"]
+    tab_briefing, tab_risk, tab_forecast, tab_grid, tab_plan, tab_wo, tab_runbook = st.tabs(
+        ["🎙️ Operator Briefing", "📊 Risk", "📈 XGBoost Forecast", "📡 Grid Snapshot", "🛠️ Mitigation Plan", "📋 Work Order", "📖 Runbook"]
     )
+
+    # ── Operator Briefing Tab ─────────────────────────────────────────────────
+    with tab_briefing:
+        st.markdown('<div class="section-header">Operator Briefing</div>', unsafe_allow_html=True)
+        briefing = result.get("operator_briefing")
+        if briefing:
+            if briefing.get("status") == "SUCCESS":
+                st.markdown(
+                    f'<div class="gg-card" style="border-left:4px solid #a855f7;background:#161b22;margin-bottom:1rem;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+                    f'<span style="font-size:0.85rem;color:#c084fc;font-weight:600;">{briefing.get("label", "Bedrock-generated operator briefing — synthetic demo only.")}</span>'
+                    f'<span class="badge" style="background:#581c87;color:#f3e8ff;">{briefing.get("model_id")}</span>'
+                    f'</div>'
+                    f'<div style="font-size:0.75rem;color:#6e7681;margin-top:0.25rem;">AWS Region: <code>{briefing.get("region")}</code> | Generated: {briefing.get("generated_at")}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    f'<div class="gg-card" style="background:#0d1117;font-size:0.88rem;line-height:1.6;color:#e6edf3;white-space:pre-wrap;">'
+                    f'{briefing.get("briefing_text")}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.warning(f"⚠️ {briefing.get('label')}\n\nError: {briefing.get('error')}")
+        else:
+            st.markdown(
+                '<div class="gg-card" style="background:#161b22;padding:1.5rem;text-align:center;">'
+                '<div style="font-size:1.5rem;">🛡️</div>'
+                '<div style="font-size:0.95rem;font-weight:600;color:#e6edf3;margin-top:0.5rem;">MOCK_MODE Active — Offline Synthetic Demo</div>'
+                '<div style="font-size:0.82rem;color:#8b949e;margin-top:0.5rem;line-height:1.5;">'
+                'Live Amazon Bedrock operator briefings are disabled while <code>MOCK_MODE=true</code>.<br>'
+                'All 8 deterministic tools ran purely locally with zero cloud spend.<br><br>'
+                'To generate live briefings using Amazon Bedrock, configure AWS credentials and set <code>MOCK_MODE=false</code> in <code>.env</code>.'
+                '</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
     # ── Risk Tab ──────────────────────────────────────────────────────────────
     with tab_risk:

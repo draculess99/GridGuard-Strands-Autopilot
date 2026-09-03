@@ -177,35 +177,48 @@ GridGuard-Strands-Autopilot/
 
 | Variable | Default | Description |
 |---|---|---|
-| `MOCK_MODE` | `true` | `true` = full demo, zero API calls. `false` = live LLM. |
-| `STRANDS_PROVIDER` | `bedrock` | `bedrock` or `anthropic` |
-| `AWS_REGION` | `us-east-1` | AWS region for Bedrock |
-| `BEDROCK_MODEL_ID` | `anthropic.claude-3-5-haiku-20241022-v1:0` | Bedrock model |
-| `ANTHROPIC_API_KEY` | *(empty)* | Required if `STRANDS_PROVIDER=anthropic` |
+| `MOCK_MODE` | `true` | `true` = full demo, zero cloud calls. `false` = live Bedrock briefing mode. |
+| `STRANDS_PROVIDER` | `bedrock` | Active provider: `bedrock` or `anthropic` |
+| `AWS_REGION` | `us-east-1` | AWS region for Amazon Bedrock |
+| `BEDROCK_MODEL_ID` | `anthropic.claude-3-5-haiku-20241022-v1:0` | Small, cost-conscious Bedrock model |
+| `LIVE_RUN_LIMIT` | `5` | Process-level ceiling on live calls to prevent runaway spend |
+| `LIVE_MAX_OUTPUT_TOKENS` | `600` | Concise output token cap on model briefings |
+| `LIVE_TEMPERATURE` | `0.2` | Sampling temperature for deterministic briefing |
+| `ANTHROPIC_API_KEY` | *(empty)* | Optional: Required only if `STRANDS_PROVIDER=anthropic` |
 | `AUDIT_LOG_PATH` | `data/audit_log.jsonl` | Append-only audit log path |
 | `LOG_LEVEL` | `INFO` | Structured JSON log level |
 
 ---
 
-## Enabling Live Mode (Optional)
+## Safe, Bounded Live Amazon Bedrock Mode
 
-To use real LLM calls instead of mock mode:
+When `MOCK_MODE=false`, GridGuard uses a real **Strands Agent** backed by **Amazon Bedrock** to generate an evidence-grounded **Operator Briefing**.
 
-```bash
-# Option A: AWS Bedrock
-MOCK_MODE=false
-STRANDS_PROVIDER=bedrock
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_REGION=us-east-1
+### Cost & Safety Safeguards
+1. **Zero Retries / Single Invocation**: The briefing agent is bounded to exactly 1 turn (`Limits(turns=1, output_tokens=600)`) with zero retries (`ModelRetryStrategy(max_attempts=1)`). No background polling, loops, memory storage, or external searches.
+2. **Process-Level Run Limit**: Governed by `LIVE_RUN_LIMIT=5` (configurable). Once reached, the application locks out further live calls until restart.
+3. **Dashboard Authorization Gate**: Before any live Bedrock request is executed from the Streamlit UI, the operator must explicitly check the confirmation box: `"I confirm I want to call Amazon Bedrock"`.
+4. **Deterministic Authority**: The LLM *cannot* modify XGBoost forecast numbers, risk severity scores, mitigation steps, work order numbers, or the approval gate. All governance remains 100% deterministic in Python.
+5. **Secret Redaction**: AWS secret keys, access keys, and tokens are automatically scrubbed from structured JSON logs.
+6. **Graceful Fallback**: If Bedrock is throttled, unavailable, or credentials fail, the workflow continues deterministically without bypassing human approval or corrupting audit integrity.
 
-# Option B: Anthropic direct
-MOCK_MODE=false
-STRANDS_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-The live agent uses the same tool functions — the LLM orchestrates them autonomously.
+### Configuring Your First Live Run
+1. Ensure model access is enabled for `anthropic.claude-3-5-haiku-20241022-v1:0` in your AWS region (e.g. `us-east-1` or `us-west-2`).
+2. Create your `.env` file:
+   ```bash
+   MOCK_MODE=false
+   STRANDS_PROVIDER=bedrock
+   AWS_REGION=us-east-1
+   AWS_ACCESS_KEY_ID=AKIA...
+   AWS_SECRET_ACCESS_KEY=...
+   LIVE_RUN_LIMIT=5
+   ```
+3. Run the dashboard or CLI demo:
+   ```bash
+   streamlit run dashboard/app.py
+   # Or run via CLI:
+   python scripts/run_demo.py --scenario SEVERE_WEATHER --approve
+   ```
 
 ---
 

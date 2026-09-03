@@ -47,6 +47,20 @@ class Settings(BaseSettings):
         default="anthropic.claude-3-5-haiku-20241022-v1:0"
     )
 
+    # ── Live Mode Safeguards ──────────────────────────────────────────────
+    LIVE_RUN_LIMIT: int = Field(
+        default=5,
+        description="Process-level limit on live Bedrock invocations to prevent runaway costs.",
+    )
+    LIVE_MAX_OUTPUT_TOKENS: int = Field(
+        default=600,
+        description="Concise maximum output tokens for live Bedrock briefings.",
+    )
+    LIVE_TEMPERATURE: float = Field(
+        default=0.2,
+        description="Sampling temperature for deterministic live briefings.",
+    )
+
     # ── Anthropic Direct ──────────────────────────────────────────────────
     ANTHROPIC_API_KEY: str = Field(default="")
     ANTHROPIC_MODEL: str = Field(default="claude-3-5-haiku-latest")

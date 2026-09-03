@@ -89,7 +89,8 @@ def build_live_agent():
     if settings.is_bedrock():
         model_kwargs: dict[str, Any] = {
             "model_id": settings.BEDROCK_MODEL_ID,
-            "region_name": settings.AWS_REGION,
+            "max_tokens": settings.LIVE_MAX_OUTPUT_TOKENS,
+            "temperature": settings.LIVE_TEMPERATURE,
         }
         if settings.AWS_ACCESS_KEY_ID:
             import boto3
@@ -100,6 +101,8 @@ def build_live_agent():
                 region_name=settings.AWS_REGION,
             )
             model_kwargs["boto_session"] = session
+        else:
+            model_kwargs["region_name"] = settings.AWS_REGION
         from strands.models import BedrockModel
         model = BedrockModel(**model_kwargs)
 
@@ -130,6 +133,191 @@ def build_live_agent():
     )
     log.info("Live agent built", extra={"provider": settings.STRANDS_PROVIDER})
     return agent
+
+
+# ── Bounded Live Operator Briefing (Amazon Bedrock via Strands) ───────────────
+
+BRIEFING_SYSTEM_PROMPT = """
+You are GridGuard Operations Autopilot, an expert grid operations advisory agent.
+Your role is to produce a concise, professional, evidence-grounded Operator Briefing for the shift supervisor.
+
+Safety Boundaries:
+- You operate strictly on SYNTHETIC / SIMULATED demo data. Do not claim to monitor or control any real physical grid.
+- All numbers, risk scores, and mitigation steps in the evidence are authoritative and computed deterministically. Do NOT alter, hallucinate, or recalculate them.
+- All drafted actions are strictly recommendations. The plan is a DRAFT and requires explicit human operator review and sign-off before execution.
+
+Format your briefing concisely using these exact sections:
+1. INCIDENT SUMMARY: High-level situation assessment.
+2. EVIDENCE & UNCERTAINTY: Telemetry data, XGBoost 24-hour peak demand/capacity constraint, and model uncertainty bounds.
+3. OPERATIONAL RATIONALE: Why the proposed mitigation steps address this specific risk profile.
+4. GOVERNANCE NOTICE: Explicit statement that this operational plan is DRAFT_PENDING_APPROVAL and requires human operator approval via the HITL gate.
+""".strip()
+
+
+def format_evidence_prompt(
+    event: dict[str, Any],
+    snapshot: dict[str, Any],
+    forecast: dict[str, Any],
+    assessment: dict[str, Any],
+    runbook: dict[str, Any],
+    plan: dict[str, Any],
+) -> str:
+    """Format structured evidence into a clear, bounded prompt for the live Bedrock agent."""
+    steps_lines = [
+        f"- Step {s.get('step')}: {s.get('action')} [Role: {s.get('responsible')}, Time: {s.get('timeframe')}]"
+        for s in plan.get("steps", [])
+    ]
+    return f"""
+EVIDENCE PACKAGE (Synthetic Grid Operations Telemetry):
+
+[INCIDENT EVENT]
+- Title: {event.get('title')}
+- Event Type: {event.get('event_type')} (ID: {event.get('event_id')})
+- Region: {event.get('region')}
+- Description: {event.get('description')}
+- Affected Assets: {', '.join(event.get('affected_assets', []))}
+
+[REGIONAL TELEMETRY SNAPSHOT]
+- Current Demand: {snapshot.get('demand_mw'):,.0f} MW
+- Available Capacity: {snapshot.get('available_capacity_mw'):,.0f} MW
+- Contingency Reserve: {snapshot.get('contingency_reserve_mw'):,.0f} MW
+- Frequency: {snapshot.get('frequency_hz')} Hz
+- Alert Level: {snapshot.get('alert_level')}
+
+[XGBOOST 24-HOUR DEMAND & RESERVE FORECAST]
+- Forecast Peak Demand: {forecast.get('predicted_peak_mw'):,.1f} MW
+- Available Generation Capacity: {forecast.get('available_capacity_mw'):,.1f} MW
+- Projected Reserve Margin: {forecast.get('reserve_margin_pct')}% ({forecast.get('reserve_margin_mw'):,.1f} MW)
+- High-Risk Hours (>=92% utilization): {forecast.get('high_risk_hours')}
+- Forecast Risk Category: {forecast.get('forecast_risk_level')}
+- Headline: {forecast.get('headline')}
+
+[DETERMINISTIC RISK ASSESSMENT]
+- Severity Score: {assessment.get('severity_score')}/5 ({assessment.get('severity_label')})
+- Priority Tier: {assessment.get('priority_tier')}
+- Forecast Impact: {assessment.get('forecast_impact_explanation')}
+- Risk Summary: {assessment.get('risk_summary')}
+
+[OPERATING RUNBOOK]
+- ID: {runbook.get('runbook_id')} — {runbook.get('title')}
+
+[PROPOSED MITIGATION PLAN ({plan.get('step_count')} Steps)]
+{chr(10).join(steps_lines)}
+
+INSTRUCTION:
+Generate a concise Operator Briefing (maximum 300-400 words) based strictly on this evidence package.
+Include the 4 required sections: Incident Summary, Evidence & Uncertainty, Operational Rationale, and Governance Notice.
+""".strip()
+
+
+def generate_live_briefing(
+    event: dict[str, Any],
+    snapshot: dict[str, Any],
+    forecast: dict[str, Any],
+    assessment: dict[str, Any],
+    runbook: dict[str, Any],
+    plan: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Generate an evidence-grounded Operator Briefing using a real Strands Agent
+    backed by Amazon Bedrock.
+
+    Guarantees:
+    - Bounded single invocation (turns=1, output_tokens=LIVE_MAX_OUTPUT_TOKENS, max_attempts=1, no retries, no loops).
+    - Receives only structured telemetry and deterministic tool evidence.
+    - Process-level run count ceiling enforced via increment_and_check_live_run_limit().
+    """
+    from gridguard.safeguards import (
+        increment_and_check_live_run_limit,
+        LiveModeCredentialsError,
+        LiveModeModelAccessError,
+        redact_secrets,
+    )
+
+    # 1. Enforce process-level live-run ceiling
+    increment_and_check_live_run_limit()
+
+    try:
+        from strands import Agent, ModelRetryStrategy
+        from strands.models.bedrock import BedrockModel
+        from strands.types.agent import Limits
+    except ImportError as exc:
+        raise ImportError("strands-agents must be installed for live mode.") from exc
+
+    import boto3
+    import botocore.exceptions
+
+    boto_session = None
+    if settings.AWS_ACCESS_KEY_ID:
+        boto_session = boto3.Session(
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            aws_session_token=settings.AWS_SESSION_TOKEN or None,
+            region_name=settings.AWS_REGION,
+        )
+
+    model_kwargs: dict[str, Any] = {
+        "model_id": settings.BEDROCK_MODEL_ID,
+        "max_tokens": settings.LIVE_MAX_OUTPUT_TOKENS,
+        "temperature": settings.LIVE_TEMPERATURE,
+    }
+    if boto_session:
+        model_kwargs["boto_session"] = boto_session
+    else:
+        model_kwargs["region_name"] = settings.AWS_REGION
+
+    try:
+        bedrock_model = BedrockModel(**model_kwargs)
+        briefing_agent = Agent(
+            model=bedrock_model,
+            system_prompt=BRIEFING_SYSTEM_PROMPT,
+            retry_strategy=ModelRetryStrategy(max_attempts=1),  # strictly no retries
+        )
+
+        evidence_prompt = format_evidence_prompt(
+            event=event,
+            snapshot=snapshot,
+            forecast=forecast,
+            assessment=assessment,
+            runbook=runbook,
+            plan=plan,
+        )
+
+        agent_result = briefing_agent(
+            evidence_prompt,
+            limits=Limits(turns=1, output_tokens=settings.LIVE_MAX_OUTPUT_TOKENS),
+        )
+
+        briefing_text = str(agent_result).strip()
+
+        return {
+            "source": "AMAZON_BEDROCK",
+            "model_id": settings.BEDROCK_MODEL_ID,
+            "region": settings.AWS_REGION,
+            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+            "briefing_text": briefing_text,
+            "label": "Bedrock-generated operator briefing — synthetic demo only.",
+            "status": "SUCCESS",
+        }
+
+    except botocore.exceptions.NoCredentialsError as exc:
+        log.error("AWS credentials not found for live Bedrock mode")
+        raise LiveModeCredentialsError(
+            "AWS credentials not found. Configure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY "
+            "or AWS_PROFILE in .env before running live mode."
+        ) from exc
+
+    except botocore.exceptions.ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        msg = exc.response.get("Error", {}).get("Message", str(exc))
+        log.error("Bedrock client error", extra={"code": code, "error_msg": redact_secrets(msg)})
+        if code in ("AccessDeniedException", "ValidationException", "ResourceNotFoundException"):
+            raise LiveModeModelAccessError(
+                f"Bedrock access error ({code}): {msg}. "
+                f"Ensure model access is enabled for {settings.BEDROCK_MODEL_ID} in {settings.AWS_REGION} "
+                "in the AWS Bedrock Console."
+            ) from exc
+        raise
 
 
 # ── Mock Workflow Engine ──────────────────────────────────────────────────────
@@ -177,13 +365,14 @@ class WorkflowStep:
         }
 
 
-def run_mock_workflow(
-    event_type: str,
+def run_workflow(
+    event_type: str = "SEVERE_WEATHER",
     *,
     on_step: Any = None,
+    mock_mode: bool | None = None,
 ) -> dict[str, Any]:
     """
-    Execute the full GridGuard workflow without any LLM calls.
+    Execute the full GridGuard operations workflow.
 
     Parameters
     ----------
@@ -191,14 +380,20 @@ def run_mock_workflow(
         One of: SEVERE_WEATHER, HIGH_DEMAND, EQUIPMENT_RISK, OUTAGE_WARNING.
     on_step:
         Optional callback(step: WorkflowStep) called after each step completes.
-        Used by the dashboard to push live updates.
+    mock_mode:
+        If True (or None when settings.MOCK_MODE=True): runs purely deterministically with zero cloud calls.
+        If False: runs deterministic tools and calls Amazon Bedrock once via Strands
+        to produce an Operator Briefing.
 
     Returns
     -------
-    dict with keys: event, steps, snapshot, runbook, assessment, plan,
-    work_order, approval_request, audit_records, overall_status.
+    dict with keys: event, steps, snapshot, forecast, runbook, assessment, plan,
+    operator_briefing, work_order, approval_request, audit_records, overall_status, mock_mode.
     """
-    log.info("run_mock_workflow started", extra={"event_type": event_type})
+    if mock_mode is None:
+        mock_mode = settings.MOCK_MODE
+
+    log.info("run_workflow started", extra={"event_type": event_type, "mock_mode": mock_mode})
 
     # Build a canonical event
     event = build_event(event_type, randomise=True)
@@ -223,7 +418,6 @@ def run_mock_workflow(
         step.start()
         steps.append(step)
         try:
-            # Unwrap and call the underlying Python function for mock mode
             result = _unwrap(fn)(**kwargs)
             step.finish(result)
             if on_step:
@@ -305,7 +499,36 @@ def run_mock_workflow(
         affected_assets=event.get("affected_assets", []),
     )
 
+    # ── Step 5b: Live Operator Briefing (Amazon Bedrock via Strands) ──────────
+    operator_briefing = None
+    if not mock_mode:
+        try:
+            operator_briefing = generate_live_briefing(
+                event=event,
+                snapshot=snapshot,
+                forecast=forecast,
+                assessment=assessment,
+                runbook=runbook,
+                plan=plan,
+            )
+        except Exception as exc:
+            log.error("Live briefing failed; continuing deterministic governance", extra={"error": str(exc)})
+            operator_briefing = {
+                "source": "AMAZON_BEDROCK",
+                "model_id": settings.BEDROCK_MODEL_ID,
+                "region": settings.AWS_REGION,
+                "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+                "briefing_text": f"Live Bedrock briefing unavailable: {str(exc)}",
+                "label": "Bedrock briefing failed — fallback to deterministic runbook.",
+                "status": "FAILED",
+                "error": str(exc),
+            }
+
     # ── Step 6: Draft Work Order ──────────────────────────────────────────────
+    wo_notes = f"Auto-drafted by GridGuard Autopilot. Severity score: {assessment['severity_score']}/5."
+    if operator_briefing and operator_briefing.get("status") == "SUCCESS":
+        wo_notes += " Includes Bedrock-generated Operator Briefing."
+
     work_order = _run_step(
         WorkflowStep("Draft Work Order", "draft_work_order"),
         draft_work_order,
@@ -317,7 +540,7 @@ def run_mock_workflow(
         plan_id=plan["plan_id"],
         mitigation_steps=plan["steps"],
         affected_assets=event.get("affected_assets", []),
-        notes=f"Auto-drafted by GridGuard Autopilot. Severity score: {assessment['severity_score']}/5.",
+        notes=wo_notes,
     )
 
     # ── Step 7: Request Human Approval ────────────────────────────────────────
@@ -339,6 +562,17 @@ def run_mock_workflow(
     )
 
     # ── Step 8: Audit — Workflow Initiated ────────────────────────────────────
+    audit_details: dict[str, Any] = {
+        "severity_score": assessment["severity_score"],
+        "priority_tier": assessment["priority_tier"],
+        "plan_id": plan["plan_id"],
+        "approval_token": approval_request["approval_token"],
+        "mock_mode": mock_mode,
+    }
+    if operator_briefing:
+        audit_details["briefing_status"] = operator_briefing.get("status", "UNKNOWN")
+        audit_details["briefing_source"] = operator_briefing.get("source", "UNKNOWN")
+
     audit_rec = _run_step(
         WorkflowStep("Audit Record", "record_audit_event"),
         record_audit_event,
@@ -351,12 +585,7 @@ def run_mock_workflow(
             f"Full workflow completed. WO {work_order['work_order_number']} drafted. "
             f"Approval token {approval_request['approval_token']} is PENDING."
         ),
-        details={
-            "severity_score": assessment["severity_score"],
-            "priority_tier": assessment["priority_tier"],
-            "plan_id": plan["plan_id"],
-            "approval_token": approval_request["approval_token"],
-        },
+        details=audit_details,
     )
     audit_records.append(audit_rec)
 
@@ -368,19 +597,45 @@ def run_mock_workflow(
         "runbook": runbook,
         "assessment": assessment,
         "plan": plan,
+        "operator_briefing": operator_briefing,
         "work_order": work_order,
         "approval_request": approval_request,
         "audit_records": audit_records,
         "overall_status": "AWAITING_HUMAN_APPROVAL",
+        "mock_mode": mock_mode,
         "completed_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     log.info(
-        "run_mock_workflow completed",
+        "run_workflow completed",
         extra={
             "event_id": event_id,
             "wo": work_order["work_order_number"],
             "token": approval_request["approval_token"],
+            "mock_mode": mock_mode,
         },
     )
     return result
+
+
+def run_mock_workflow(
+    event_type: str = "SEVERE_WEATHER",
+    *,
+    on_step: Any = None,
+) -> dict[str, Any]:
+    """
+    Execute the full GridGuard mock workflow deterministically (zero cloud tokens).
+    Preserves backwards compatibility for all existing tests and callers.
+    """
+    return run_workflow(event_type=event_type, on_step=on_step, mock_mode=True)
+
+
+def run_live_workflow(
+    event_type: str = "SEVERE_WEATHER",
+    *,
+    on_step: Any = None,
+) -> dict[str, Any]:
+    """
+    Execute the GridGuard live workflow with Amazon Bedrock operator briefing.
+    """
+    return run_workflow(event_type=event_type, on_step=on_step, mock_mode=False)

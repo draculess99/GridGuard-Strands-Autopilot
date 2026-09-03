@@ -30,7 +30,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
-from gridguard.agent import run_mock_workflow
+from gridguard.agent import run_mock_workflow, run_workflow
+from gridguard.config import settings
 from gridguard.data.synthetic_events import get_scenario_names
 from gridguard.tools.human_approval import resolve_approval
 
@@ -81,10 +82,11 @@ def main() -> int:
     args = parser.parse_args()
 
     console.rule("[bold steel_blue]GridGuard Strands Operations Autopilot[/]")
-    console.print(f"\n[dim]Scenario:[/] [bold]{args.scenario}[/]  |  MOCK_MODE=ON\n")
+    mode_str = "MOCK_MODE=ON (zero cloud spend)" if settings.MOCK_MODE else f"LIVE BEDROCK ({settings.BEDROCK_MODEL_ID})"
+    console.print(f"\n[dim]Scenario:[/] [bold]{args.scenario}[/]  |  [cyan]{mode_str}[/]\n")
 
     with console.status("[steel_blue]Running workflow…[/]"):
-        result = run_mock_workflow(args.scenario)
+        result = run_workflow(args.scenario, mock_mode=settings.MOCK_MODE)
 
     if args.json_output:
         console.print_json(json.dumps(result, default=str))
@@ -95,6 +97,23 @@ def main() -> int:
     plan = result["plan"]
     work_order = result["work_order"]
     approval = result["approval_request"]
+    briefing = result.get("operator_briefing")
+
+    # ── Operator Briefing (if live mode active) ──────────────────────────────
+    if briefing and briefing.get("status") == "SUCCESS":
+        console.print(Panel(
+            f"[bold magenta]{briefing.get('label')}[/]\n"
+            f"[dim]Model: {briefing.get('model_id')} | Region: {briefing.get('region')} | Generated: {briefing.get('generated_at')}[/]\n\n"
+            f"{briefing.get('briefing_text')}",
+            title="[bold]🎙️ Amazon Bedrock Operator Briefing[/]",
+            border_style="magenta",
+        ))
+    elif briefing and briefing.get("status") == "FAILED":
+        console.print(Panel(
+            f"[yellow]{briefing.get('label')}[/]\n[red]{briefing.get('error')}[/]",
+            title="[bold]⚠️ Operator Briefing Status[/]",
+            border_style="yellow",
+        ))
 
     # ── Event ─────────────────────────────────────────────────────────────────
     console.print(Panel(
