@@ -258,11 +258,12 @@ with st.sidebar:
 
     confirm_live = False
     if not settings.MOCK_MODE:
+        fallback_html = f'<br>Fallback model: <code>{settings.BEDROCK_FALLBACK_MODEL_ID}</code>' if getattr(settings, "BEDROCK_FALLBACK_MODEL_ID", None) else ""
         st.markdown(
             f'<div style="margin-bottom:0.75rem;padding:0.6rem;background:#2d1305;border:1px solid #7c2d12;border-radius:6px;font-size:0.75rem;color:#fdba74;">'
             f'⚡ <strong>LIVE BEDROCK MODE ACTIVE</strong><br>'
-            f'Region: <code>{settings.AWS_REGION}</code><br>'
-            f'Model: <code>{settings.BEDROCK_MODEL_ID}</code><br>'
+            f'Provider: <code>{settings.STRANDS_PROVIDER}</code><br>'
+            f'Primary model: <code>{settings.BEDROCK_MODEL_ID}</code>{fallback_html}<br>'
             f'Live calls: <strong>{get_live_run_count()} / {settings.LIVE_RUN_LIMIT}</strong>'
             '</div>',
             unsafe_allow_html=True,
@@ -298,10 +299,23 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    mock_status_text = (
+        "Zero cloud API calls. Live Bedrock backend remains configurable."
+        if settings.MOCK_MODE
+        else "Live Bedrock calls enabled. Nova Lite is attempted first; Nova Micro is used once as fallback."
+    )
+    mock_on_off = "ON" if settings.MOCK_MODE else "OFF"
+    
     st.markdown(
-        '<div style="margin-top:1rem;font-size:0.72rem;color:#6e7681;">'
-        f"MOCK_MODE: {'ON ✓ (zero cloud spend)' if settings.MOCK_MODE else 'OFF — Amazon Bedrock active'}"
-        "</div>",
+        f'<div class="section-header" style="margin-top:1.5rem;">Strands Backend</div>'
+        f'<div style="font-size:0.75rem;color:#8b949e;background:#161b22;padding:0.75rem;border-radius:6px;border:1px solid #30363d;">'
+        f'<strong>Orchestration:</strong> AWS Strands Agents SDK<br>'
+        f'<strong>Provider:</strong> <code>{settings.STRANDS_PROVIDER}</code><br>'
+        f'<strong>Primary model:</strong> <code>{settings.BEDROCK_MODEL_ID}</code><br>'
+        f'<strong>Fallback model:</strong> <code>{getattr(settings, "BEDROCK_FALLBACK_MODEL_ID", "")}</code><br>'
+        f'<strong>Mock mode:</strong> <span style="color:{"#86efac" if settings.MOCK_MODE else "#fca5a5"};font-weight:600;">{mock_on_off}</span><br><br>'
+        f'<em>{mock_status_text}</em>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 

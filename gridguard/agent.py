@@ -266,8 +266,10 @@ def generate_live_briefing(
     else:
         model_kwargs["region_name"] = settings.AWS_REGION
 
-    try:
-        bedrock_model = BedrockModel(**model_kwargs)
+    def attempt_briefing(model_id: str) -> dict[str, Any]:
+        mk = dict(model_kwargs)
+        mk["model_id"] = model_id
+        bedrock_model = BedrockModel(**mk)
         briefing_agent = Agent(
             model=bedrock_model,
             system_prompt=BRIEFING_SYSTEM_PROMPT,
@@ -292,13 +294,23 @@ def generate_live_briefing(
 
         return {
             "source": "AMAZON_BEDROCK",
-            "model_id": settings.BEDROCK_MODEL_ID,
+            "model_id": model_id,
             "region": settings.AWS_REGION,
             "generated_at": datetime.now(tz=timezone.utc).isoformat(),
             "briefing_text": briefing_text,
             "label": "Bedrock-generated operator briefing — synthetic demo only.",
             "status": "SUCCESS",
         }
+
+    try:
+        try:
+            return attempt_briefing(settings.BEDROCK_MODEL_ID)
+        except Exception as exc:
+            if getattr(settings, "BEDROCK_FALLBACK_MODEL_ID", None) and settings.BEDROCK_MODEL_ID != settings.BEDROCK_FALLBACK_MODEL_ID:
+                log.warning(f"Primary model {settings.BEDROCK_MODEL_ID} failed: {exc}. Trying fallback model {settings.BEDROCK_FALLBACK_MODEL_ID}.")
+                return attempt_briefing(settings.BEDROCK_FALLBACK_MODEL_ID)
+            raise
+
 
     except botocore.exceptions.NoCredentialsError as exc:
         log.error("AWS credentials not found for live Bedrock mode")

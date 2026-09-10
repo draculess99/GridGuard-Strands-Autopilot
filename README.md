@@ -10,6 +10,18 @@
 
 ---
 
+## Hackathon Judging Note
+
+- **GridGuard uses AWS Strands Agents SDK** for agent orchestration.
+- **Amazon Bedrock** is the default provider.
+- **Amazon Nova Lite** is the default Bedrock model because it is AWS-native and cost-conscious.
+- **Amazon Nova Micro** is available as a cheaper fallback.
+- **Claude Haiku** remains configurable if Anthropic Bedrock access is later approved.
+- **Mock mode** remains the default safe mode and makes zero cloud calls.
+- The app can be fully judged from mock/demo mode, screenshots, code, and optional live Bedrock mode.
+
+---
+
 ## What It Does
 
 Grid and utility operations teams spend significant time repeatedly triaging risk signals, checking runbooks, creating mitigation recommendations, and preparing work orders. **GridGuard Strands Operations Autopilot** is an autonomous-but-human-governed agent that handles this repetitive structured work — and only escalates when an operator decision is needed.
@@ -89,7 +101,7 @@ Open http://localhost:8501 — select a scenario, click **Run Agent Workflow**, 
 pytest tests/ -v --tb=short
 ```
 
-Expected: **all 56 tests pass** with zero cloud credentials.
+Expected: **all 71 tests pass** with zero cloud credentials.
 
 ---
 
@@ -111,14 +123,15 @@ Expected: **all 56 tests pass** with zero cloud credentials.
 ## Dashboard Sections
 
 1. **Ingested Event** — event title, description, ID, severity badge
-2. **Workflow Timeline** — all 8 steps with status badges and elapsed time
-3. **Risk Assessment** — severity gauge, load factor, reserve margin, and explicit XGBoost forecast impact
-4. **XGBoost Forecast** — peak demand, available capacity, projected reserve margin, and hourly trajectory chart
-5. **Grid Snapshot** — regional telemetry at-a-glance
-6. **Mitigation Plan** — ordered step cards with responsible roles and timeframes
-7. **Work Order Draft** — structured document with Approve / Reject HITL buttons
-8. **Operational Runbook** — full runbook for the event type
-9. **Audit Trail** — paginated immutable event log with SHA-256 hash display
+2. **Strands Backend Panel** — displays active orchestration, provider, primary model, fallback model, and mock/live status in the sidebar
+3. **Workflow Timeline** — all 8 steps with status badges and elapsed time
+4. **Risk Assessment** — severity gauge, load factor, reserve margin, and explicit XGBoost forecast impact
+5. **XGBoost Forecast** — peak demand, available capacity, projected reserve margin, and hourly trajectory chart
+6. **Grid Snapshot** — regional telemetry at-a-glance
+7. **Mitigation Plan** — ordered step cards with responsible roles and timeframes
+8. **Work Order Draft** — structured document with Approve / Reject HITL buttons
+9. **Operational Runbook** — full runbook for the event type
+10. **Audit Trail** — paginated immutable event log with SHA-256 hash display
 
 ---
 
@@ -180,7 +193,8 @@ GridGuard-Strands-Autopilot/
 | `MOCK_MODE` | `true` | `true` = full demo, zero cloud calls. `false` = live Bedrock briefing mode. |
 | `STRANDS_PROVIDER` | `bedrock` | Active provider: `bedrock` or `anthropic` |
 | `AWS_REGION` | `us-east-1` | AWS region for Amazon Bedrock |
-| `BEDROCK_MODEL_ID` | `anthropic.claude-haiku-4-5-20251001-v1:0` | Active, cost-conscious Bedrock model (fully configurable) |
+| `BEDROCK_MODEL_ID` | `amazon.nova-lite-v1:0` | Active, AWS-native, cost-conscious Bedrock model (fully configurable) |
+| `BEDROCK_FALLBACK_MODEL_ID` | `amazon.nova-micro-v1:0` | Cheaper fallback Bedrock model if the primary model fails |
 | `LIVE_RUN_LIMIT` | `5` | Process-level ceiling on live calls to prevent runaway spend |
 | `LIVE_MAX_OUTPUT_TOKENS` | `600` | Concise output token cap on model briefings |
 | `LIVE_TEMPERATURE` | `0.2` | Sampling temperature for deterministic briefing |
@@ -203,7 +217,7 @@ When `MOCK_MODE=false`, GridGuard uses a real **Strands Agent** backed by **Amaz
 6. **Graceful Fallback**: If Bedrock is throttled, unavailable, or credentials fail, the workflow continues deterministically without bypassing human approval or corrupting audit integrity.
 
 ### Configuring Your First Live Run
-1. Ensure model access is enabled for `anthropic.claude-haiku-4-5-20251001-v1:0` (or your chosen model) in your AWS region (e.g. `us-east-1` or `us-west-2`).
+1. Ensure model access is enabled for `amazon.nova-lite-v1:0` (or your chosen model) in your AWS region (e.g. `us-east-1` or `us-west-2`).
 2. Create your `.env` file:
    ```bash
    MOCK_MODE=false
@@ -212,7 +226,8 @@ When `MOCK_MODE=false`, GridGuard uses a real **Strands Agent** backed by **Amaz
    AWS_ACCESS_KEY_ID=AKIA...
    AWS_SECRET_ACCESS_KEY=...
    # Default active cost-conscious model, or specify any active Bedrock model
-   BEDROCK_MODEL_ID=anthropic.claude-haiku-4-5-20251001-v1:0
+   BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
+   BEDROCK_FALLBACK_MODEL_ID=amazon.nova-micro-v1:0
    LIVE_RUN_LIMIT=5
    ```
 3. Run the dashboard or CLI demo:
@@ -245,15 +260,23 @@ This project was built during the AWS Agents for Humans Hackathon submission per
   - Deterministic zero-token mock workflow engine
   - Non-skippable Human-in-the-Loop (HITL) approval gate
   - Streamlit operations dashboard with forecast trajectory chart and risk explanation
+  - Configurable mock and live Bedrock modes (Nova Lite / Nova Micro fallback)
   - Append-only SHA-256 tamper-evident JSONL audit trail
   - GitHub Actions multi-version CI pipeline (Python 3.11 / 3.12)
-  - 56-test automated test suite (100% passing offline without credentials)
+  - 71-test automated test suite (100% passing offline without credentials)
 
 ---
 
 ## Screenshots
 
-*[Screenshots will be added after the Streamlit dashboard is running — run `streamlit run dashboard/app.py` to see the live interface.]*
+*[TODO: Add screenshot to capture: docs/images/strands-backend-panel.png]*
+
+---
+
+## Deployment & Accessibility
+
+- **Public Demo**: A live public demo of the application may be hosted on Railway for judge accessibility (running in safe `MOCK_MODE` to prevent unauthenticated cloud API spend).
+- **Bedrock AgentCore**: An optional AWS Bedrock AgentCore smoke test can be documented if performed. The primary orchestration relies on the AWS Strands Agents SDK, and AgentCore is not live by default.
 
 ---
 

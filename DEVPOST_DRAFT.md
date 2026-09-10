@@ -50,8 +50,8 @@ GridGuard Strands Autopilot is an autonomous operations agent that:
 - **Four realistic scenarios** — Severe Weather, High Demand, Equipment Risk, Outage Warning — each with full synthetic event data and a matching runbook.
 - **Immutable audit trail** — JSONL append-only log with SHA-256 content hashing for tamper detection.
 - **Structured JSON logging** — CloudWatch-compatible, one JSON object per line.
-- **56 automated tests** — all pass with zero cloud credentials; covers all 8 tools, all scenarios, and audit trail integrity.
-- **Clean architecture** — ready for optional Amazon Bedrock AgentCore deployment without blocking the local MVP.
+- **71 automated tests** — all pass with zero cloud credentials; covers all 8 tools, all scenarios, and audit trail integrity.
+- **Clean architecture** — ready for an optional AWS Bedrock AgentCore smoke test without blocking the local MVP. The public demo may be hosted on Railway for judge accessibility.
 
 ---
 
@@ -106,7 +106,7 @@ GridGuard Agent (Strands SDK)
 
 - Full end-to-end workflow running locally with `MOCK_MODE=true` — zero API keys, zero cost.
 - 8 Strands tool functions, each with typed signatures, structured return types, and structured logging.
-- 56 tests covering all tools, all scenarios, and audit trail integrity — 100% green.
+- 71 tests covering all tools, all scenarios, and audit trail integrity — 100% green.
 - Clean live-mode path for Bedrock or Anthropic by setting two env vars.
 
 ---
@@ -122,7 +122,7 @@ GridGuard Agent (Strands SDK)
 
 ## What's Next
 
-- Amazon Bedrock AgentCore deployment
+- Optional AWS Bedrock AgentCore smoke test
 - PostgreSQL persistence for the audit trail
 - Real EIA API integration for live demand data
 - Slack / PagerDuty integration for the HITL approval gate
@@ -141,9 +141,10 @@ This project was built during the AWS Agents for Humans Hackathon submission per
   - Deterministic zero-token mock workflow engine
   - Non-skippable Human-in-the-Loop (HITL) approval gate
   - Streamlit operations dashboard with forecast trajectory chart and risk explanation
+  - Configurable mock and live Bedrock modes (Nova Lite / Nova Micro fallback)
   - Append-only SHA-256 tamper-evident JSONL audit trail
   - GitHub Actions multi-version CI pipeline (Python 3.11 / 3.12)
-  - 56-test automated test suite (100% passing offline without credentials)
+  - 71-test automated test suite (100% passing offline without credentials)
 
 ---
 

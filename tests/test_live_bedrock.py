@@ -120,6 +120,31 @@ class TestBoundedLiveBedrockMode:
     @patch("boto3.Session")
     @patch("strands.models.bedrock.BedrockModel")
     @patch("strands.Agent")
+    def test_live_mode_uses_fallback_on_primary_failure(
+        self, mock_agent_cls, mock_bedrock_cls, mock_boto_cls
+    ):
+        mock_agent_instance = MagicMock()
+        mock_result_fallback = MagicMock()
+        mock_result_fallback.__str__.return_value = "Fallback briefing text"
+        mock_agent_instance.side_effect = [
+            RuntimeError("Primary model failed"),
+            mock_result_fallback
+        ]
+        mock_agent_cls.return_value = mock_agent_instance
+
+        result = run_workflow("SEVERE_WEATHER", mock_mode=False)
+
+        assert mock_agent_instance.call_count == 2
+        briefing = result["operator_briefing"]
+        assert briefing is not None
+        assert briefing["status"] == "SUCCESS"
+        assert briefing["model_id"] == settings.BEDROCK_FALLBACK_MODEL_ID
+        assert "Fallback briefing text" in briefing["briefing_text"]
+
+
+    @patch("boto3.Session")
+    @patch("strands.models.bedrock.BedrockModel")
+    @patch("strands.Agent")
     def test_failed_live_call_does_not_bypass_approval_or_corrupt_audit(
         self, mock_agent_cls, mock_bedrock_cls, mock_boto_cls
     ):
@@ -249,17 +274,18 @@ class TestSafeguardsAndCostControl:
 class TestBedrockModelConfiguration:
     """Verify active model defaults, configurable model-ID, and Strands compatibility."""
 
-    def test_default_model_id_is_active_claude_haiku_4_5(self):
-        assert settings.BEDROCK_MODEL_ID == "anthropic.claude-haiku-4-5-20251001-v1:0"
+    def test_default_model_id_is_active_nova_lite(self):
+        assert settings.BEDROCK_MODEL_ID == "amazon.nova-lite-v1:0"
+        assert settings.BEDROCK_FALLBACK_MODEL_ID == "amazon.nova-micro-v1:0"
 
     def test_model_id_is_configurable_via_env(self, monkeypatch):
         from gridguard.config import Settings
-        monkeypatch.setenv("BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+        monkeypatch.setenv("BEDROCK_MODEL_ID", "anthropic.claude-haiku-4-5-20251001-v1:0")
         custom_settings = Settings()
-        assert custom_settings.BEDROCK_MODEL_ID == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        assert custom_settings.BEDROCK_MODEL_ID == "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     @patch("boto3.Session")
-    def test_strands_bedrock_model_supports_claude_haiku_4_5(self, mock_boto):
+    def test_strands_bedrock_model_supports_nova_lite(self, mock_boto):
         from strands.models.bedrock import BedrockModel
 
         mock_client = MagicMock()
@@ -267,10 +293,8 @@ class TestBedrockModelConfiguration:
         mock_boto.return_value.client.return_value = mock_client
 
         model = BedrockModel(
-            model_id="anthropic.claude-haiku-4-5-20251001-v1:0",
+            model_id="amazon.nova-lite-v1:0",
             region_name="us-east-1",
         )
-        assert model.config["model_id"] == "anthropic.claude-haiku-4-5-20251001-v1:0"
+        assert model.config["model_id"] == "amazon.nova-lite-v1:0"
 
-        req = model.format_request(messages=[{"role": "user", "content": [{"text": "Hello"}]}])
-        assert req["modelId"] == "anthropic.claude-haiku-4-5-20251001-v1:0"

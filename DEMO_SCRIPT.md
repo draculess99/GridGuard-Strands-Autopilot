@@ -34,7 +34,9 @@
 ### [0:30 – 1:00] Architecture Overview (30 seconds)
 
 **Voiceover:**
-> "The system is built on the AWS Strands Agents SDK. Seven purpose-built tool functions form the agent's workflow. The agent orchestrates them autonomously in live mode — or we can run them deterministically in mock mode for offline demos and testing.
+> "The system is built on the AWS Strands Agents SDK. Eight purpose-built tool functions form the agent's workflow. The agent orchestrates them autonomously in live mode — or we can run them deterministically in mock mode for offline demos and testing.
+>
+> On the sidebar, the Strands Backend panel shows our configuration: Amazon Bedrock provider, Amazon Nova Lite as the primary model, and Nova Micro as a safe fallback.
 >
 > At the centre of the workflow is a mandatory human approval gate. The agent drafts and recommends — it cannot act without an operator's sign-off."
 
@@ -109,7 +111,7 @@
 ### [4:20 – 4:40] CLI Demo & Tests
 
 **Voiceover:**
-> "The system also ships with a rich CLI runner and a complete test suite. All 25-plus tests pass with zero cloud credentials — full mock mode."
+> "The system also ships with a rich CLI runner and a complete test suite. All 71 tests pass with zero cloud credentials — full mock mode."
 
 **Actions:**
 1. In terminal, run:
