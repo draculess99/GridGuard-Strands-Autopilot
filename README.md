@@ -291,7 +291,11 @@ A simulated severe-weather grid event moves through the eight-step workflow: gri
 
 ## Public Railway Deployment Walkthrough
 
-GridGuard is publicly deployed as a Streamlit dashboard on Railway: https://gridguard-strands-autopilot-production.up.railway.app. The public deployment runs with `MOCK_MODE=true`, so the full Strands-orchestrated workflow is safely reviewable using deterministic synthetic data with zero Bedrock API calls. Railway hosts the reviewer-facing dashboard; it does not replace the Strands agent architecture.
+GridGuard is publicly deployed as a Streamlit dashboard on Railway: https://gridguard-strands-autopilot-production.up.railway.app. Railway hosts the reviewer-facing dashboard; it does not replace the Strands agent architecture.
+
+* **Live LLM Path**: The live optional LLM path uses **Groq** through the Strands Agents SDK, with model `openai/gpt-oss-20b`. In live Groq mode, Railway privately stores the Groq API key; no API key is committed to GitHub or displayed in the application. Groq generates the bounded operator briefing only. The grid-risk scenarios, forecast inputs, workflow steps, mitigation plan, human approval, and audit trail remain synthetic/deterministic and safety-governed. Groq is not Bedrock, AgentCore, or an AWS-hosted model, and it does not control a real grid.
+* **Safe Fallback**: When `MOCK_MODE=true`, GridGuard runs the deterministic synthetic workflow with **zero Groq, Bedrock, or other LLM API calls**. This mock mode remains the safe, reproducible, no-model-spend fallback.
+* **Amazon Bedrock**: Amazon Bedrock is configurable but currently not used by the public demo because account-level runtime access remains unavailable.
 
 ### 1. Live dashboard ready
 
@@ -317,7 +321,7 @@ The completed public workflow safely records the approval decision, approver ide
 
 ![Railway forecast and audit trail](docs/images/07-railway-live-forecast-and-audit.png)
 
-This public Railway deployment is the intended reviewer-facing application. Amazon Bedrock remains a configurable live-model path when `MOCK_MODE=false` and AWS credentials are supplied privately; it was intentionally left disabled for the public safe demo. The separate AWS Lambda/CloudFormation smoke-test evidence documents an optional internal action-handler deployment proof, not the public website and not a full AgentCore Runtime deployment.
+This public Railway deployment is the intended reviewer-facing application. As noted above, Amazon Bedrock remains a configurable live-model path when `MOCK_MODE=false` and AWS credentials are supplied privately, but is currently not used. The separate AWS Lambda/CloudFormation smoke-test evidence documents an optional internal action-handler deployment proof, not the public website and not a full AgentCore Runtime deployment.
 
 ### 5. Optional AWS Lambda deployment proof — separate from the application runtime
 
@@ -335,9 +339,9 @@ The deployed Lambda was then invoked with a structured smoke-test event. It retu
 
 ### Deployment relationship
 
-* **Railway** is the intended public-hosting path for the Streamlit dashboard.
-* **Mock mode** is the default safe, zero-cloud-cost demonstration profile.
-* **Bedrock live mode** can be enabled later through private Railway environment variables.
+* **Railway** is the intended public-hosting path for the Streamlit dashboard, optionally using **Groq** for the live briefing.
+* **Mock mode** is the default safe, reproducible, no-model-spend fallback with **zero Groq, Bedrock, or other LLM API calls**.
+* **Amazon Bedrock** is configurable but currently not used by the public demo because account-level runtime access remains unavailable.
 * **AWS Lambda** is optional internal deployment evidence and can be deleted after submission without affecting Railway.
 
 ---
