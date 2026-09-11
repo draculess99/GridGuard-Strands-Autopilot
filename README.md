@@ -287,7 +287,37 @@ A simulated severe-weather grid event moves through the eight-step workflow: gri
 
 ![Approved GridGuard workflow and audit record](docs/images/workflow-approved-thumbnail.png)
 
-### 4. Optional AWS Lambda deployment proof — separate from the application runtime
+## Public Railway Deployment Walkthrough
+
+GridGuard is publicly deployed as a Streamlit dashboard on Railway: https://gridguard-strands-autopilot-production.up.railway.app. The public deployment runs with `MOCK_MODE=true`, so the full Strands-orchestrated workflow is safely reviewable using deterministic synthetic data with zero Bedrock API calls. Railway hosts the reviewer-facing dashboard; it does not replace the Strands agent architecture.
+
+### 1. Live dashboard ready
+
+The Railway URL loads the public GridGuard dashboard and allows a reviewer to select a synthetic grid-risk scenario. It identifies the approver for audit purposes and explicitly displays that the safe mock mode is active.
+
+![Live Railway dashboard ready](docs/images/05-railway-live-dashboard-ready.png)
+
+### 2. Complete human-governed workflow
+
+The public workflow successfully completed all eight Strands-orchestrated steps: grid snapshot, XGBoost demand forecast, runbook retrieval, risk assessment, mitigation planning, work-order drafting, the human approval gate, and the audit record. The work order is approved only after the named Shift Manager explicitly authorizes it, at which point an audit record is written.
+
+![Railway workflow approved](docs/images/06-railway-live-workflow-approved.png)
+
+### 3. Forecast evidence
+
+The XGBoost forecast compares predicted demand with available capacity, highlighting the reserve margin and high-risk hours to provide evidence for the mitigation recommendation. This is a synthetic demonstration forecast, not a live electrical-grid feed.
+
+![Railway XGBoost forecast](docs/images/07-railway-live-xgboost-forecast.png)
+
+### 4. Approved decision and immutable audit trail
+
+The completed public workflow safely records the approval decision, approver identity, work-order reference, and workflow-completed events into the immutable audit trail. This emphasizes that GridGuard is strictly human-governed: it drafts recommendations and work orders but does not perform real-world grid control.
+
+![Railway forecast and audit trail](docs/images/07-railway-live-forecast-and-audit.png)
+
+This public Railway deployment is the intended reviewer-facing application. Amazon Bedrock remains a configurable live-model path when `MOCK_MODE=false` and AWS credentials are supplied privately; it was intentionally left disabled for the public safe demo. The separate AWS Lambda/CloudFormation smoke-test evidence documents an optional internal action-handler deployment proof, not the public website and not a full AgentCore Runtime deployment.
+
+### 5. Optional AWS Lambda deployment proof — separate from the application runtime
 
 GridGuard’s normal Strands workflow does not depend on this Lambda. This small internal AWS Lambda handler was deployed separately through CloudFormation to demonstrate an AWS deployment component: infrastructure packaging, IAM execution-role configuration, and a structured request/response smoke test.
 
