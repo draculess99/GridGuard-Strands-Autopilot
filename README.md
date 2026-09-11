@@ -204,6 +204,37 @@ GridGuard-Strands-Autopilot/
 
 ---
 
+## Railway Deployment Configuration
+
+GridGuard is publicly deployed on Railway and supports two clear modes:
+* an optional live Groq-backed operator-briefing path through the Strands Agents SDK;
+* a deterministic synthetic mock fallback.
+
+```dotenv
+# Optional live Groq operator briefing on Railway
+MOCK_MODE=false
+LIVE_LLM_ENABLED=true
+STRANDS_PROVIDER=groq
+GROQ_MODEL_ID=openai/gpt-oss-20b
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+```dotenv
+# Deterministic synthetic workflow — zero LLM API calls
+MOCK_MODE=true
+```
+
+**Configuration Notes:**
+* `GROQ_API_KEY` is configured privately in Railway Variables and must never be committed to GitHub, shown in screenshots, or placed in a URL.
+* In live mode, Groq generates only the bounded operator briefing.
+* The grid scenarios, forecast inputs, XGBoost forecast, workflow steps, mitigation plan, human approval gate, and audit trail remain synthetic/deterministic and safety-governed.
+* With `MOCK_MODE=true`, GridGuard uses the deterministic synthetic workflow and makes **zero Groq, Bedrock, or other LLM API calls**.
+* The mock path is the safe, reproducible, no-model-spend fallback for reviewers and local development.
+* Groq is not Amazon Bedrock or AgentCore, and GridGuard does not control a real electrical grid.
+* Amazon Bedrock remains configurable, but is not active in the public deployment while the account-level Bedrock Runtime access issue is unresolved.
+
+---
+
 ## Safe, Bounded Live Amazon Bedrock Mode
 
 When `MOCK_MODE=false`, GridGuard uses a real **Strands Agent** backed by **Amazon Bedrock** to generate an evidence-grounded **Operator Briefing**.
