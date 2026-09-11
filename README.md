@@ -267,41 +267,46 @@ This project was built during the AWS Agents for Humans Hackathon submission per
 
 ---
 
-## Screenshots
+## Evidence Walkthrough
 
-![Local dashboard and Strands backend](docs/images/00-local-dashboard-ready-strands-backend.png)
+GridGuard is demonstrated as a complete, human-governed grid-operations workflow. The screenshots below show the product experience first, then the automated test evidence, and finally the optional AWS deployment evidence.
 
-![71 offline tests passing](docs/images/01-local-tests-pass.png)
+### 1. Safe, configurable Strands agent
+
+GridGuard uses the AWS Strands Agents SDK to orchestrate its workflow. The dashboard makes the active provider, primary/fallback Bedrock model configuration, and `MOCK_MODE` status visible. The public demo defaults to offline mock mode, so it can be reviewed without cloud-model cost or credentials.
 
 ![Strands backend configuration](docs/images/strands-backend-panel.png)
 
+### 2. Tested before deployment
+
+The project has 71 passing offline tests. This provides regression evidence for the deterministic workflow, safety controls, approval behavior, and audit handling before any cloud integration is considered.
+
+![71 offline tests passing](docs/images/01-local-tests-pass.png)
+
+### 3. End-to-end human-governed workflow
+
+A simulated severe-weather grid event moves through the eight-step workflow: grid snapshot, demand forecast, runbook retrieval, risk assessment, mitigation planning, work-order drafting, mandatory human approval, and audit recording. The system is synthetic-only; it does not control real grid infrastructure.
+
 ![Approved GridGuard workflow and audit record](docs/images/workflow-approved-thumbnail.png)
+
+### 4. Optional AWS Lambda action-group integration
+
+To demonstrate an AWS deployment component, GridGuard includes a small internal Lambda action-group handler deployed through CloudFormation. This is separate from the public Railway dashboard and is not a claim that the full Strands agent runs in an AgentCore Runtime.
+
+The CloudFormation Console confirms that the stack `gridguard-strands-agentcore-smoke` reached `UPDATE_COMPLETE` and deployed both the Lambda function and its IAM role.
 
 ![AWS CloudFormation Lambda resources updated successfully](docs/images/03-aws-cloudformation-resources-update-complete.png)
 
+The deployed Lambda was then invoked with a structured smoke-test event. It returned `StatusCode: 200`, no `FunctionError`, and a structured mock-mode response.
+
 ![AWS Lambda action-group smoke test successful](docs/images/04-aws-lambda-smoke-test-success.png)
 
-The AWS screenshots document an optional internal Lambda action-group integration. They do not represent a public API, full GridGuard web deployment, or full AgentCore Runtime deployment.
+### Deployment relationship
 
----
-
-## Deployment & Accessibility
-
-### Railway public dashboard
-
-* Railway is the intended public host for the Streamlit dashboard and is separate from the AWS Lambda evidence.
-* The recommended public demo uses `MOCK_MODE=true`, so judges can use the deterministic workflow, human-approval gate, and audit trail with zero cloud-model calls.
-* A bounded live Strands + Bedrock briefing path can later be enabled on Railway with private server-side environment variables: `MOCK_MODE=false`, `STRANDS_PROVIDER=bedrock`, `AWS_REGION`, `BEDROCK_MODEL_ID`, and `BEDROCK_FALLBACK_MODEL_ID`.
-* AWS credentials must remain private Railway variables and must never be exposed in the browser.
-
-### Optional AWS Lambda action-group integration
-
-* A CloudFormation stack named `gridguard-strands-agentcore-smoke` deployed an internal AWS Lambda action handler and IAM execution role.
-* The action handler accepts a structured action-group request and returns a structured response.
-* The deployment was smoke-tested successfully: the CloudFormation stack reached `UPDATE_COMPLETE`; the Lambda returned `StatusCode: 200`; no `FunctionError` was returned; and the structured response returned in mock mode.
-* This is valid AWS deployment evidence for the project.
-* It is not a public website, public API, full GridGuard deployment, or a claim that the complete Strands agent is running in an AgentCore Runtime.
-* The Lambda stack is independent of Railway and can be deleted after the demo/submission without affecting the Railway dashboard.
+* **Railway** hosts the public Streamlit dashboard for judge access.
+* **Mock mode** is the default safe, zero-cloud-cost demonstration profile.
+* **Bedrock live mode** can be enabled later through private Railway environment variables.
+* **AWS Lambda** is optional internal deployment evidence and can be deleted after submission without affecting Railway.
 
 ---
 
