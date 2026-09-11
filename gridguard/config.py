@@ -78,7 +78,7 @@ class Settings(BaseSettings):
         description="Groq API key. Never printed, logged, or committed.",
     )
     GROQ_MODEL_ID: str = Field(
-        default="llama-3.1-8b-instant",
+        default="openai/gpt-oss-20b",
         description="Groq model ID for the optional live demo briefing.",
     )
 

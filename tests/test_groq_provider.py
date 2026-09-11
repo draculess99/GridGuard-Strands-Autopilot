@@ -13,7 +13,7 @@ import pytest
 # -- Helpers -------------------------------------------------------------------
 
 def _patch_for_groq(monkeypatch, *, mock_mode=False, live_llm_enabled=True,
-                    groq_key="gsk_testkey123", groq_model="llama-3.1-8b-instant",
+                    groq_key="gsk_testkey123", groq_model="openai/gpt-oss-20b",
                     access_code="secret123"):
     """Patch settings to simulate a fully-configured Groq live-mode environment."""
     from gridguard import config as cfg
