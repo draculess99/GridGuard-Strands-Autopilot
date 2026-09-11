@@ -334,6 +334,19 @@ def generate_live_briefing(
 
 # ── Groq Briefing (optional live demo via Strands OpenAIModel) ────────────────
 
+GROQ_BRIEFING_SYSTEM_PROMPT = """
+You are GridGuard Operations Autopilot.
+Generate ONE concise final operator briefing of NO MORE THAN 150 words based strictly on the evidence.
+
+Include exactly:
+1. Current risk.
+2. Recommended mitigation.
+3. The required human approval (state explicitly that this is DRAFT_PENDING_APPROVAL and requires sign-off).
+
+Do not ask for chain-of-thought, tool use, internal reasoning, a long report, or follow-up questions.
+Operate strictly on the synthetic demo data. Do not alter numbers or risk scores.
+""".strip()
+
 def generate_groq_briefing(
     event: dict[str, Any],
     snapshot: dict[str, Any],
@@ -378,12 +391,15 @@ def generate_groq_briefing(
             "base_url": "https://api.groq.com/openai/v1",
         },
         model_id=settings.GROQ_MODEL_ID,
-        params={"max_tokens": settings.LIVE_MAX_OUTPUT_TOKENS},
+        params={
+            "max_tokens": settings.LIVE_MAX_OUTPUT_TOKENS,
+            "reasoning_effort": "low",
+        },
     )
 
     briefing_agent = Agent(
         model=groq_model,
-        system_prompt=BRIEFING_SYSTEM_PROMPT,
+        system_prompt=GROQ_BRIEFING_SYSTEM_PROMPT,
         retry_strategy=ModelRetryStrategy(max_attempts=1),
     )
 

@@ -138,3 +138,49 @@ def test_mock_workflow_unaffected_by_groq_config(monkeypatch):
     assert result["mock_mode"] is True
     assert result["overall_status"] == "AWAITING_HUMAN_APPROVAL"
     assert result["operator_briefing"] is None
+
+
+# -- 6. Groq-specific Prompt and Configuration ----------------------------------
+
+def test_groq_system_prompt_is_concise():
+    from gridguard.agent import GROQ_BRIEFING_SYSTEM_PROMPT
+    assert "150 words" in GROQ_BRIEFING_SYSTEM_PROMPT
+    assert "chain-of-thought" in GROQ_BRIEFING_SYSTEM_PROMPT
+    assert "DRAFT_PENDING_APPROVAL" in GROQ_BRIEFING_SYSTEM_PROMPT
+
+
+def test_groq_model_configured_with_low_reasoning_effort(monkeypatch):
+    _patch_for_groq(monkeypatch)
+    from gridguard import agent
+    import strands.models.openai
+    import strands
+    
+    # We want to capture the model kwargs without invoking Groq
+    captured_kwargs = {}
+    
+    class CaptureModel:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            
+    # Mock the Agent to just return a dummy string instead of calling an LLM
+    class DummyAgentResult:
+        def __str__(self): return "test briefing"
+
+    monkeypatch.setattr(strands.models.openai, "OpenAIModel", CaptureModel)
+    monkeypatch.setattr(strands, "Agent", lambda **kw: lambda *a, **k: DummyAgentResult())
+    
+    from gridguard import safeguards
+    monkeypatch.setattr(safeguards, "validate_groq_live_gate", lambda: None)
+    monkeypatch.setattr(safeguards, "increment_and_check_live_run_limit", lambda: None)
+
+    event = {"title": "A", "event_type": "B", "event_id": "C", "region": "D", "description": "E"}
+    snapshot = {"demand_mw": 0, "available_capacity_mw": 0, "contingency_reserve_mw": 0, "frequency_hz": 60, "alert_level": "None"}
+    forecast = {"predicted_peak_mw": 0, "available_capacity_mw": 0, "reserve_margin_pct": 0, "reserve_margin_mw": 0, "high_risk_hours": 0, "forecast_risk_level": "A", "headline": "B"}
+    assessment = {"severity_score": 1, "severity_label": "C", "priority_tier": 1, "forecast_impact_explanation": "D", "risk_summary": "E"}
+    
+    agent.generate_groq_briefing(event, snapshot, forecast, assessment, {}, {})
+    
+    assert "params" in captured_kwargs
+    params = captured_kwargs["params"]
+    assert params.get("reasoning_effort") == "low"
+    assert "max_tokens" in params
