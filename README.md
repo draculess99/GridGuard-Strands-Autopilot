@@ -289,9 +289,11 @@ A simulated severe-weather grid event moves through the eight-step workflow: gri
 
 ![Approved GridGuard workflow and audit record](docs/images/workflow-approved-thumbnail.png)
 
-### 4. Optional AWS Lambda action-group integration
+### 4. Optional AWS Lambda deployment proof — separate from the application runtime
 
-To demonstrate an AWS deployment component, GridGuard includes a small internal Lambda action-group handler deployed through CloudFormation. This is separate from the public Railway dashboard and is not a claim that the full Strands agent runs in an AgentCore Runtime.
+GridGuard’s normal Strands workflow does not depend on this Lambda. This small internal AWS Lambda handler was deployed separately through CloudFormation to demonstrate an AWS deployment component: infrastructure packaging, IAM execution-role configuration, and a structured request/response smoke test.
+
+It is not a public website, public API, full GridGuard deployment, or full AgentCore Runtime deployment. Deleting this optional stack does not affect the local dashboard or a future Railway-hosted dashboard.
 
 The CloudFormation Console confirms that the stack `gridguard-strands-agentcore-smoke` reached `UPDATE_COMPLETE` and deployed both the Lambda function and its IAM role.
 
@@ -303,7 +305,7 @@ The deployed Lambda was then invoked with a structured smoke-test event. It retu
 
 ### Deployment relationship
 
-* **Railway** hosts the public Streamlit dashboard for judge access.
+* **Railway** is the intended public-hosting path for the Streamlit dashboard.
 * **Mock mode** is the default safe, zero-cloud-cost demonstration profile.
 * **Bedrock live mode** can be enabled later through private Railway environment variables.
 * **AWS Lambda** is optional internal deployment evidence and can be deleted after submission without affecting Railway.
