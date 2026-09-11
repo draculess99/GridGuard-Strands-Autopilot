@@ -16,7 +16,7 @@
 - **Amazon Bedrock is the configurable live-model path.** When `MOCK_MODE=false`, the Strands agent can generate a bounded, evidence-grounded operator briefing using Amazon Nova Lite, with Nova Micro as a lower-cost fallback.
 - **Groq is an optional secondary live demo path** (via the Strands OpenAI-compatible model adapter). It requires a four-factor gate: `MOCK_MODE=false`, `LIVE_LLM_ENABLED=true`, `STRANDS_PROVIDER=groq`, and a non-empty `GROQ_API_KEY`. It is not Bedrock, AgentCore, or an AWS-hosted model.
 - **Mock mode is the default safe demonstration profile.** The full deterministic workflow remains reviewable with zero cloud-model calls or credentials.
-- **Railway is the intended public-hosting path** for the Streamlit dashboard. The public Railway deployment uses `MOCK_MODE=true`; Groq and Bedrock are disabled for public review.
+- **Railway is the intended public-hosting path** for the Streamlit dashboard. The public Railway deployment uses the Groq provider for the optional, bounded live operator briefing. Bedrock is not active in the public deployment.
 - **AWS Lambda is optional deployment evidence.** It demonstrates a separately deployed internal action handler and successful CloudFormation/Lambda smoke test; it is not the full GridGuard application or full AgentCore Runtime deployment.
 
 
@@ -34,28 +34,14 @@ The agent ingests a simulated grid-risk event (severe weather, rising demand, eq
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    OP[Grid Operator]:::human -->|selects scenario| UI[Streamlit Dashboard]
-    UI -->|run event| WF[GridGuard Agent\nStrands SDK]
+![GridGuard architecture diagram](docs/images/GridGuard_Architecture_Diagram.png)
 
-    WF --> T1["① get_grid_snapshot\n📡 Regional telemetry"]
-    T1  --> T2["② forecast_demand_xgboost\n📈 24h ML Demand & Reserve Forecast"]
-    T2  --> T3["③ retrieve_runbook\n📖 Operating procedure"]
-    T3  --> T4["④ assess_risk\n📊 Severity 1–5 · Telemetry + Forecast"]
-    T4  --> T5["⑤ generate_mitigation_steps\n🛠️ Ordered action plan"]
-    T5  --> T6["⑥ draft_work_order\n📋 Structured DRAFT document"]
-    T6  --> GATE{"⑦ request_human_approval\n⚠️ MANDATORY HITL GATE"}
+GridGuard is publicly deployed as a Streamlit dashboard on Railway. The AWS Strands Agents SDK orchestrates the core eight-stage workflow.
 
-    GATE -->|"Operator: APPROVE / REJECT"| T7["⑧ record_audit_event\n📝 Immutable JSONL record"]
-    UI  -->|"Approve / Reject buttons"| GATE
-    T7  --> AUDIT[(audit_log.jsonl\nAppend-only · SHA-256 hashed)]
-
-    classDef human fill:#1e3a5f,color:#fff,stroke:#4a90d9
-    classDef gate  fill:#7f1d1d,color:#fff,stroke:#dc2626
-    OP:::human
-    GATE:::gate
-```
+- **Deterministic Pipeline**: The XGBoost demand forecast, runbook retrieval, risk assessment, mitigation plan generation, mandatory human approval gate, and immutable audit trail all execute deterministically.
+- **Live LLM Briefing**: The deployment uses the **Groq** provider for an optional, bounded live operator briefing (`openai/gpt-oss-20b`). Note that Groq is not Amazon Bedrock or AgentCore.
+- **Safe Fallback**: When `MOCK_MODE=true`, GridGuard runs the exact same workflow deterministically with zero LLM API calls.
+- **Safety Boundary**: The application relies exclusively on synthetic data and does not monitor or control any real electrical grid.
 
 ---
 
