@@ -25,6 +25,10 @@ class LiveModeModelAccessError(RuntimeError):
     """Raised when the specified Bedrock model is not enabled or access is denied."""
 
 
+class LiveModeDemoGateError(RuntimeError):
+    """Raised when the multi-factor live demo gate is not satisfied."""
+
+
 # ── Process-level Live Run Counter ────────────────────────────────────────────
 
 _counter_lock = threading.Lock()
@@ -82,10 +86,12 @@ _SENSITIVE_KEY_NAMES = {
     "aws_secret_access_key",
     "aws_session_token",
     "anthropic_api_key",
+    "groq_api_key",
     "api_key",
     "secret_key",
     "secret",
     "password",
+    "live_demo_access_code",
 }
 
 
@@ -113,3 +119,42 @@ def redact_secrets(obj: Any) -> Any:
         return [redact_secrets(item) for item in obj]
 
     return obj
+
+
+# ── Multi-factor Live Demo Gate ───────────────────────────────────────────────
+
+def validate_live_demo_gate(operator_code: str) -> None:
+    """
+    Enforce every required condition before allowing a live Groq briefing.
+
+    Raises LiveModeDemoGateError with a safe, non-revealing message if any
+    gate condition is not satisfied.  The operator_code is never echoed in
+    error messages or logs.
+
+    Gate conditions (all must be True):
+        1. settings.MOCK_MODE is False
+        2. settings.LIVE_LLM_ENABLED is True
+        3. settings.STRANDS_PROVIDER == 'groq'
+        4. settings.GROQ_API_KEY is non-empty
+        5. operator_code matches settings.LIVE_DEMO_ACCESS_CODE (non-empty)
+    """
+    if settings.MOCK_MODE:
+        raise LiveModeDemoGateError(
+            "Live LLM demo locked — synthetic mode active. Set MOCK_MODE=false to unlock."
+        )
+    if not settings.LIVE_LLM_ENABLED:
+        raise LiveModeDemoGateError(
+            "Live LLM demo locked — synthetic mode active. Set LIVE_LLM_ENABLED=true to unlock."
+        )
+    if not settings.is_groq():
+        raise LiveModeDemoGateError(
+            "Live LLM demo locked — synthetic mode active. Set STRANDS_PROVIDER=groq to unlock."
+        )
+    if not settings.GROQ_API_KEY:
+        raise LiveModeDemoGateError(
+            "Live LLM demo locked — synthetic mode active. GROQ_API_KEY is not configured."
+        )
+    if not settings.LIVE_DEMO_ACCESS_CODE or operator_code != settings.LIVE_DEMO_ACCESS_CODE:
+        raise LiveModeDemoGateError(
+            "Live LLM demo locked — synthetic mode active. Access code not accepted."
+        )

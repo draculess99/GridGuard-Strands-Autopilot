@@ -332,6 +332,92 @@ def generate_live_briefing(
         raise
 
 
+# ── Groq Briefing (optional live demo via Strands OpenAIModel) ────────────────
+
+def generate_groq_briefing(
+    event: dict[str, Any],
+    snapshot: dict[str, Any],
+    forecast: dict[str, Any],
+    assessment: dict[str, Any],
+    runbook: dict[str, Any],
+    plan: dict[str, Any],
+    operator_code: str = "",
+) -> dict[str, Any]:
+    """
+    Generate an evidence-grounded Operator Briefing using Groq via Strands OpenAIModel.
+
+    All five gate conditions must be satisfied before any API call is made:
+      - MOCK_MODE=false
+      - LIVE_LLM_ENABLED=true
+      - STRANDS_PROVIDER=groq
+      - GROQ_API_KEY non-empty
+      - correct LIVE_DEMO_ACCESS_CODE supplied by the operator
+
+    This is a bounded single invocation (turns=1). It does not control any real grid.
+    Groq is not Bedrock, AgentCore, or an AWS-hosted model.
+    """
+    from gridguard.safeguards import (
+        increment_and_check_live_run_limit,
+        validate_live_demo_gate,
+    )
+
+    # 1. Enforce multi-factor gate (raises LiveModeDemoGateError with safe message if blocked)
+    validate_live_demo_gate(operator_code)
+
+    # 2. Enforce process-level live-run ceiling
+    increment_and_check_live_run_limit()
+
+    try:
+        from strands import Agent, ModelRetryStrategy
+        from strands.models.openai import OpenAIModel
+        from strands.types.agent import Limits
+    except ImportError as exc:
+        raise ImportError("strands-agents must be installed for Groq live mode.") from exc
+
+    groq_model = OpenAIModel(
+        client_args={
+            "api_key": settings.GROQ_API_KEY,
+            "base_url": "https://api.groq.com/openai/v1",
+        },
+        model_id=settings.GROQ_MODEL_ID,
+        params={"max_tokens": settings.LIVE_MAX_OUTPUT_TOKENS},
+    )
+
+    briefing_agent = Agent(
+        model=groq_model,
+        system_prompt=BRIEFING_SYSTEM_PROMPT,
+        retry_strategy=ModelRetryStrategy(max_attempts=1),
+    )
+
+    evidence_prompt = format_evidence_prompt(
+        event=event,
+        snapshot=snapshot,
+        forecast=forecast,
+        assessment=assessment,
+        runbook=runbook,
+        plan=plan,
+    )
+
+    agent_result = briefing_agent(
+        evidence_prompt,
+        limits=Limits(turns=1, output_tokens=settings.LIVE_MAX_OUTPUT_TOKENS),
+    )
+
+    briefing_text = str(agent_result).strip()
+
+    return {
+        "source": "GROQ",
+        "model_id": settings.GROQ_MODEL_ID,
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "briefing_text": briefing_text,
+        "label": (
+            "Groq-generated operator briefing — optional live demo only. "
+            "Not Bedrock, not AgentCore. Does not control a real electrical grid."
+        ),
+        "status": "SUCCESS",
+    }
+
+
 # ── Mock Workflow Engine ──────────────────────────────────────────────────────
 
 class WorkflowStep:
@@ -382,6 +468,7 @@ def run_workflow(
     *,
     on_step: Any = None,
     mock_mode: bool | None = None,
+    **kwargs,
 ) -> dict[str, Any]:
     """
     Execute the full GridGuard operations workflow.
@@ -511,18 +598,33 @@ def run_workflow(
         affected_assets=event.get("affected_assets", []),
     )
 
-    # ── Step 5b: Live Operator Briefing (Amazon Bedrock via Strands) ──────────
+    # ── Step 5b: Live Operator Briefing (Groq or Amazon Bedrock via Strands) ─────
     operator_briefing = None
     if not mock_mode:
         try:
-            operator_briefing = generate_live_briefing(
-                event=event,
-                snapshot=snapshot,
-                forecast=forecast,
-                assessment=assessment,
-                runbook=runbook,
-                plan=plan,
-            )
+            if settings.is_groq():
+                # Groq path: caller must supply operator_code via kwargs if needed.
+                # In direct run_workflow calls the gate will refuse unless all
+                # conditions are met.  We pass an empty code here so the gate
+                # will block unless explicitly called from the UI with a valid code.
+                operator_briefing = generate_groq_briefing(
+                    event=event,
+                    snapshot=snapshot,
+                    forecast=forecast,
+                    assessment=assessment,
+                    runbook=runbook,
+                    plan=plan,
+                    operator_code=kwargs.get("operator_code", ""),
+                )
+            else:
+                operator_briefing = generate_live_briefing(
+                    event=event,
+                    snapshot=snapshot,
+                    forecast=forecast,
+                    assessment=assessment,
+                    runbook=runbook,
+                    plan=plan,
+                )
         except Exception as exc:
             log.error("Live briefing failed; continuing deterministic governance", extra={"error": str(exc)})
             operator_briefing = {

@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # ── LLM Provider ──────────────────────────────────────────────────────
     STRANDS_PROVIDER: str = Field(
         default="bedrock",
-        description="Active LLM provider: 'bedrock' or 'anthropic'.",
+        description="Active LLM provider: 'bedrock', 'anthropic', or 'groq'.",
     )
 
     # ── AWS / Bedrock ─────────────────────────────────────────────────────
@@ -70,6 +70,32 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = Field(default="")
     ANTHROPIC_MODEL: str = Field(default="claude-3-5-haiku-latest")
 
+    # ── Groq (optional live demo provider) ───────────────────────────────────
+    # Requires MOCK_MODE=false, LIVE_LLM_ENABLED=true, STRANDS_PROVIDER=groq,
+    # a non-empty GROQ_API_KEY, and the correct LIVE_DEMO_ACCESS_CODE in the UI.
+    GROQ_API_KEY: str = Field(
+        default="",
+        description="Groq API key. Never printed, logged, or committed.",
+    )
+    GROQ_MODEL_ID: str = Field(
+        default="llama-3.1-8b-instant",
+        description="Groq model ID for the optional live demo briefing.",
+    )
+
+    # ── Live Demo Gate (multi-factor safety) ─────────────────────────────────
+    LIVE_LLM_ENABLED: bool = Field(
+        default=False,
+        description=(
+            "Master switch for any live LLM path (Groq or Bedrock). "
+            "Must be True together with MOCK_MODE=false, the correct provider, "
+            "provider credentials, and the correct LIVE_DEMO_ACCESS_CODE."
+        ),
+    )
+    LIVE_DEMO_ACCESS_CODE: str = Field(
+        default="",
+        description="Operator access code required to unlock a live LLM demo run. Never exposed in UI or logs.",
+    )
+
     # ── Application ───────────────────────────────────────────────────────
     LOG_LEVEL: str = Field(default="INFO")
     AUDIT_LOG_PATH: Path = Field(default=Path("data/audit_log.jsonl"))
@@ -79,6 +105,9 @@ class Settings(BaseSettings):
 
     def is_anthropic(self) -> bool:
         return self.STRANDS_PROVIDER.lower() == "anthropic"
+
+    def is_groq(self) -> bool:
+        return self.STRANDS_PROVIDER.lower() == "groq"
 
 
 # Singleton — import this everywhere instead of constructing new instances.

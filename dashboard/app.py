@@ -257,7 +257,45 @@ with st.sidebar:
     st.divider()
 
     confirm_live = False
-    if not settings.MOCK_MODE:
+    operator_code_input = ""
+
+    if settings.MOCK_MODE:
+        st.markdown(
+            '<div style="margin-bottom:0.75rem;padding:0.5rem;background:#0d2818;border:1px solid #1e4620;border-radius:6px;font-size:0.75rem;color:#86efac;">'
+            '🛡️ <strong>MOCK_MODE: ON</strong> (Offline safe)<br>'
+            'Zero cloud API calls. Deterministic synthetic demo.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    elif settings.is_groq():
+        if settings.LIVE_LLM_ENABLED and settings.GROQ_API_KEY:
+            st.markdown(
+                f'<div style="margin-bottom:0.75rem;padding:0.6rem;background:#1a0d2e;border:1px solid #6d28d9;border-radius:6px;font-size:0.75rem;color:#c4b5fd;">'
+                f'🔮 <strong>GROQ LIVE DEMO MODE</strong><br>'
+                f'Provider: <code>groq</code><br>'
+                f'Model: <code>{settings.GROQ_MODEL_ID}</code><br>'
+                f'Live calls: <strong>{get_live_run_count()} / {settings.LIVE_RUN_LIMIT}</strong><br>'
+                f'<em>Optional bounded demo. Not Bedrock, not AgentCore.<br>Does not control a real grid.</em>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            operator_code_input = st.text_input(
+                "Demo access code",
+                value="",
+                type="password",
+                key="live_demo_access_code_input",
+                help="Enter the operator access code to unlock a live Groq demo run. Never shared or logged.",
+            )
+        else:
+            st.markdown(
+                '<div style="margin-bottom:0.75rem;padding:0.5rem;background:#0d2818;border:1px solid #1e4620;border-radius:6px;font-size:0.75rem;color:#86efac;">'
+                '🛡️ <strong>Live LLM demo locked — synthetic mode active.</strong><br>'
+                'LIVE_LLM_ENABLED or GROQ_API_KEY is not configured.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+    else:
+        # Bedrock path (existing behaviour)
         fallback_html = f'<br>Fallback model: <code>{settings.BEDROCK_FALLBACK_MODEL_ID}</code>' if getattr(settings, "BEDROCK_FALLBACK_MODEL_ID", None) else ""
         st.markdown(
             f'<div style="margin-bottom:0.75rem;padding:0.6rem;background:#2d1305;border:1px solid #7c2d12;border-radius:6px;font-size:0.75rem;color:#fdba74;">'
@@ -274,17 +312,38 @@ with st.sidebar:
             key="confirm_live_call",
             help="Confirmation required before initiating a paid Amazon Bedrock API call.",
         )
+
+    mock_on_off = "ON" if settings.MOCK_MODE else "OFF"
+    if settings.MOCK_MODE:
+        mock_status_text = "Zero cloud API calls. Live Bedrock/Groq backend remains configurable."
+    elif settings.is_groq():
+        mock_status_text = f"Optional Groq live demo path ({settings.GROQ_MODEL_ID}). Access-code gate required."
     else:
-        st.markdown(
-            '<div style="margin-bottom:0.75rem;padding:0.5rem;background:#0d2818;border:1px solid #1e4620;border-radius:6px;font-size:0.75rem;color:#86efac;">'
-            '🛡️ <strong>MOCK_MODE: ON</strong> (Offline safe)<br>'
-            'Zero cloud API calls. Deterministic synthetic demo.'
-            '</div>',
-            unsafe_allow_html=True,
+        mock_status_text = "Live Bedrock calls enabled. Nova Lite is attempted first; Nova Micro is used once as fallback."
+
+    # Groq-specific model line; show Bedrock models only when provider is bedrock
+    if settings.is_groq():
+        model_line = f'<strong>Model:</strong> <code>{settings.GROQ_MODEL_ID}</code> (Groq)<br>'
+    else:
+        model_line = (
+            f'<strong>Primary model:</strong> <code>{settings.BEDROCK_MODEL_ID}</code><br>'
+            f'<strong>Fallback model:</strong> <code>{getattr(settings, "BEDROCK_FALLBACK_MODEL_ID", "")}</code><br>'
         )
 
+    st.markdown(
+        f'<div class="section-header" style="margin-top:1.5rem;">Strands Backend</div>'
+        f'<div style="font-size:0.75rem;color:#8b949e;background:#161b22;padding:0.75rem;border-radius:6px;border:1px solid #30363d;">'
+        f'<strong>Orchestration:</strong> AWS Strands Agents SDK<br>'
+        f'<strong>Provider:</strong> <code>{settings.STRANDS_PROVIDER}</code><br>'
+        f'{model_line}'
+        f'<strong>Mock mode:</strong> <span style="color:{"#86efac" if settings.MOCK_MODE else "#fca5a5"};font-weight:600;">{mock_on_off}</span><br><br>'
+        f'<em>{mock_status_text}</em>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
     run_btn = st.button(
-        "▶ Run Agent Workflow",
+        "\u25b6 Run Agent Workflow",
         use_container_width=True,
         type="primary",
     )
@@ -292,34 +351,15 @@ with st.sidebar:
     st.divider()
     st.markdown(
         '<div class="safety-notice">'
-        "⚠️ <strong>Safety Notice</strong><br>"
+        "\u26a0\ufe0f <strong>Safety Notice</strong><br>"
         "This system operates on <em>synthetic data only</em>. "
         "It does not connect to, monitor, or control any real electric grid."
         "</div>",
         unsafe_allow_html=True,
     )
 
-    mock_status_text = (
-        "Zero cloud API calls. Live Bedrock backend remains configurable."
-        if settings.MOCK_MODE
-        else "Live Bedrock calls enabled. Nova Lite is attempted first; Nova Micro is used once as fallback."
-    )
-    mock_on_off = "ON" if settings.MOCK_MODE else "OFF"
-    
-    st.markdown(
-        f'<div class="section-header" style="margin-top:1.5rem;">Strands Backend</div>'
-        f'<div style="font-size:0.75rem;color:#8b949e;background:#161b22;padding:0.75rem;border-radius:6px;border:1px solid #30363d;">'
-        f'<strong>Orchestration:</strong> AWS Strands Agents SDK<br>'
-        f'<strong>Provider:</strong> <code>{settings.STRANDS_PROVIDER}</code><br>'
-        f'<strong>Primary model:</strong> <code>{settings.BEDROCK_MODEL_ID}</code><br>'
-        f'<strong>Fallback model:</strong> <code>{getattr(settings, "BEDROCK_FALLBACK_MODEL_ID", "")}</code><br>'
-        f'<strong>Mock mode:</strong> <span style="color:{"#86efac" if settings.MOCK_MODE else "#fca5a5"};font-weight:600;">{mock_on_off}</span><br><br>'
-        f'<em>{mock_status_text}</em>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
 
-# ── Main area header ─────────────────────────────────────────────────────────
+# \u2500\u2500 Main area header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 st.markdown(
     '<div class="hero-title">GridGuard Strands Operations Autopilot</div>'
@@ -332,20 +372,26 @@ st.markdown("---")
 
 if run_btn:
     st.session_state.run_error = None
-    if not settings.MOCK_MODE and not confirm_live:
+    # Bedrock live gate — Groq uses its own access-code gate inside run_workflow
+    if not settings.MOCK_MODE and not settings.is_groq() and not confirm_live:
         st.session_state.run_error = (
             "Live Bedrock invocation cancelled: Please check 'I confirm I want to call Amazon Bedrock' "
             "in the sidebar before initiating a paid cloud API call."
         )
     else:
-        spinner_msg = (
-            "Agent is running the workflow… (MOCK_MODE — no API calls)"
-            if settings.MOCK_MODE
-            else f"Agent is generating Bedrock Operator Briefing via Strands ({settings.BEDROCK_MODEL_ID})…"
-        )
+        if settings.MOCK_MODE:
+            spinner_msg = "Agent is running the workflow\u2026 (MOCK_MODE \u2014 no API calls)"
+        elif settings.is_groq():
+            spinner_msg = f"Agent is generating Groq Operator Briefing via Strands ({settings.GROQ_MODEL_ID})\u2026"
+        else:
+            spinner_msg = f"Agent is generating Bedrock Operator Briefing via Strands ({settings.BEDROCK_MODEL_ID})\u2026"
         with st.spinner(spinner_msg):
             try:
-                result = run_workflow(scenario, mock_mode=settings.MOCK_MODE)
+                result = run_workflow(
+                    scenario,
+                    mock_mode=settings.MOCK_MODE,
+                    operator_code=operator_code_input,
+                )
                 st.session_state.workflow_result = result
                 st.session_state.approval_token = result["approval_request"]["approval_token"]
                 st.session_state.approval_status = "PENDING"
