@@ -269,14 +269,34 @@ This project was built during the AWS Agents for Humans Hackathon submission per
 
 ## Screenshots
 
-*[TODO: Add screenshot to capture: docs/images/strands-backend-panel.png]*
+- `00-local-dashboard-ready-strands-backend.png` — local dashboard ready; Strands backend configuration visible.
+- `01-local-tests-pass.png` — 71 offline tests passed.
+- `02-agentcore-deploy-start-script.png` — optional AWS Lambda deployment preparation started.
+- `02b-agentcore-prep-complete.png` — Lambda handler and CloudFormation deployment files prepared.
+- `03-aws-cloudformation-resources-update-complete.png` — direct AWS Console evidence: `gridguard-strands-agentcore-smoke` reached `UPDATE_COMPLETE` and shows the Lambda and IAM role resources.
+- `04-aws-lambda-smoke-test-success.png` — successful Lambda smoke test: `StatusCode: 200`, no `FunctionError`, and a structured action-group response.
+- `strands-backend-panel.png` — Strands SDK / Bedrock provider configuration with mock mode visible.
+- `workflow-approved-thumbnail.png` — completed workflow with human approval and audit record written.
 
 ---
 
 ## Deployment & Accessibility
 
-- **Public Demo**: A live public demo of the application may be hosted on Railway for judge accessibility (running in safe `MOCK_MODE` to prevent unauthenticated cloud API spend).
-- **Bedrock AgentCore**: An optional AWS Bedrock AgentCore smoke test can be documented if performed. The primary orchestration relies on the AWS Strands Agents SDK, and AgentCore is not live by default.
+### Railway public dashboard
+
+* Railway is the intended public host for the Streamlit dashboard and is separate from the AWS Lambda evidence.
+* The recommended public demo uses `MOCK_MODE=true`, so judges can use the deterministic workflow, human-approval gate, and audit trail with zero cloud-model calls.
+* A bounded live Strands + Bedrock briefing path can later be enabled on Railway with private server-side environment variables: `MOCK_MODE=false`, `STRANDS_PROVIDER=bedrock`, `AWS_REGION`, `BEDROCK_MODEL_ID`, and `BEDROCK_FALLBACK_MODEL_ID`.
+* AWS credentials must remain private Railway variables and must never be exposed in the browser.
+
+### Optional AWS Lambda action-group integration
+
+* A CloudFormation stack named `gridguard-strands-agentcore-smoke` deployed an internal AWS Lambda action handler and IAM execution role.
+* The action handler accepts a structured action-group request and returns a structured response.
+* The deployment was smoke-tested successfully: the CloudFormation stack reached `UPDATE_COMPLETE`; the Lambda returned `StatusCode: 200`; no `FunctionError` was returned; and the structured response returned in mock mode.
+* This is valid AWS deployment evidence for the project.
+* It is not a public website, public API, full GridGuard deployment, or a claim that the complete Strands agent is running in an AgentCore Runtime.
+* The Lambda stack is independent of Railway and can be deleted after the demo/submission without affecting the Railway dashboard.
 
 ---
 

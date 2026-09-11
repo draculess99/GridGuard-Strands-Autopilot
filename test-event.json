@@ -1,0 +1,1 @@
+﻿{"actionGroup": "GridGuardStrandsActionGroup", "apiPath": "/smoke-test", "httpMethod": "POST", "requestBody": {"content": {"application/json": {"properties": [{"name": "event_type", "type": "string", "value": "SEVERE_WEATHER"}]}}}}

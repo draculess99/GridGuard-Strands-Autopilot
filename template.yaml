@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  GridGuard Strands Autopilot - AgentCore Smoke Test
+  This template deploys the Python Strands Agent wrapper as an AWS Lambda function
+  suitable for Bedrock AgentCore integration.
+
+Resources:
+  GridGuardAgentCoreFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: agentcore_lambda.lambda_handler
+      Runtime: python3.11
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          # Use MOCK_MODE=true for safe, cost-free smoke tests without real Bedrock calls
+          MOCK_MODE: "true"
+          STRANDS_PROVIDER: "bedrock"
+
+Outputs:
+  AgentCoreFunctionArn:
+    Description: "ARN of the AgentCore Lambda wrapper function"
+    Value: !GetAtt GridGuardAgentCoreFunction.Arn
