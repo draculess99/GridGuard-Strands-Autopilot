@@ -10,15 +10,13 @@
 
 ---
 
-## Hackathon Judging Note
+## Hackathon Alignment: Strands First, Bedrock Ready
 
-- **GridGuard uses AWS Strands Agents SDK** for agent orchestration.
-- **Amazon Bedrock** is the default provider.
-- **Amazon Nova Lite** is the default Bedrock model because it is AWS-native and cost-conscious.
-- **Amazon Nova Micro** is available as a cheaper fallback.
-- **Claude Haiku** remains configurable if Anthropic Bedrock access is later approved.
-- **Mock mode** remains the default safe mode and makes zero cloud calls.
-- The app can be fully judged from mock/demo mode, screenshots, code, and optional live Bedrock mode.
+- **Strands Agents SDK is the core of GridGuard.** It orchestrates the eight-step grid-operations workflow, tool calls, human approval gate, and audit trail.
+- **Amazon Bedrock is the configurable live-model path.** When `MOCK_MODE=false`, the Strands agent can generate a bounded, evidence-grounded operator briefing using Amazon Nova Lite, with Nova Micro as a lower-cost fallback.
+- **Mock mode is the default safe demonstration profile.** The full deterministic workflow remains reviewable with zero cloud-model calls or credentials.
+- **Railway is the intended public-hosting path** for the Streamlit dashboard.
+- **AWS Lambda is optional deployment evidence.** It demonstrates a separately deployed internal action handler and successful CloudFormation/Lambda smoke test; it is not the full GridGuard application or full AgentCore Runtime deployment.
 
 ---
 
