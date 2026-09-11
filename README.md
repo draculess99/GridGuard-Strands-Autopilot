@@ -14,7 +14,7 @@
 
 - **Strands Agents SDK is the core of GridGuard.** It orchestrates the eight-step grid-operations workflow, tool calls, human approval gate, and audit trail.
 - **Amazon Bedrock is the configurable live-model path.** When `MOCK_MODE=false`, the Strands agent can generate a bounded, evidence-grounded operator briefing using Amazon Nova Lite, with Nova Micro as a lower-cost fallback.
-- **Groq is an optional secondary live demo path** (via the Strands OpenAI-compatible model adapter). It requires a five-factor gate: `MOCK_MODE=false`, `LIVE_LLM_ENABLED=true`, `STRANDS_PROVIDER=groq`, a non-empty `GROQ_API_KEY`, and a private operator access code. It is not Bedrock, AgentCore, or an AWS-hosted model.
+- **Groq is an optional secondary live demo path** (via the Strands OpenAI-compatible model adapter). It requires a four-factor gate: `MOCK_MODE=false`, `LIVE_LLM_ENABLED=true`, `STRANDS_PROVIDER=groq`, and a non-empty `GROQ_API_KEY`. It is not Bedrock, AgentCore, or an AWS-hosted model.
 - **Mock mode is the default safe demonstration profile.** The full deterministic workflow remains reviewable with zero cloud-model calls or credentials.
 - **Railway is the intended public-hosting path** for the Streamlit dashboard. The public Railway deployment uses `MOCK_MODE=true`; Groq and Bedrock are disabled for public review.
 - **AWS Lambda is optional deployment evidence.** It demonstrates a separately deployed internal action handler and successful CloudFormation/Lambda smoke test; it is not the full GridGuard application or full AgentCore Runtime deployment.

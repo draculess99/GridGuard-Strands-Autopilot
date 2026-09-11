@@ -14,7 +14,7 @@ from gridguard.config import settings
 
 
 class LiveRunLimitExceededError(RuntimeError):
-    """Raised when the process-level live Bedrock run limit has been reached."""
+    """Raised when the process-level live run limit has been reached."""
 
 
 class LiveModeCredentialsError(RuntimeError):
@@ -22,11 +22,7 @@ class LiveModeCredentialsError(RuntimeError):
 
 
 class LiveModeModelAccessError(RuntimeError):
-    """Raised when the specified Bedrock model is not enabled or access is denied."""
-
-
-class LiveModeDemoGateError(RuntimeError):
-    """Raised when the multi-factor live demo gate is not satisfied."""
+    """Raised when the specified model is not enabled or access is denied."""
 
 
 # ── Process-level Live Run Counter ────────────────────────────────────────────
@@ -91,7 +87,6 @@ _SENSITIVE_KEY_NAMES = {
     "secret_key",
     "secret",
     "password",
-    "live_demo_access_code",
 }
 
 
@@ -121,40 +116,34 @@ def redact_secrets(obj: Any) -> Any:
     return obj
 
 
-# ── Multi-factor Live Demo Gate ───────────────────────────────────────────────
-
-def validate_live_demo_gate(operator_code: str) -> None:
+def validate_groq_live_gate() -> None:
     """
     Enforce every required condition before allowing a live Groq briefing.
 
-    Raises LiveModeDemoGateError with a safe, non-revealing message if any
-    gate condition is not satisfied.  The operator_code is never echoed in
-    error messages or logs.
+    Raises RuntimeError with a clear, provider-accurate message if any
+    condition is not satisfied.
 
     Gate conditions (all must be True):
         1. settings.MOCK_MODE is False
         2. settings.LIVE_LLM_ENABLED is True
         3. settings.STRANDS_PROVIDER == 'groq'
         4. settings.GROQ_API_KEY is non-empty
-        5. operator_code matches settings.LIVE_DEMO_ACCESS_CODE (non-empty)
     """
     if settings.MOCK_MODE:
-        raise LiveModeDemoGateError(
-            "Live LLM demo locked — synthetic mode active. Set MOCK_MODE=false to unlock."
+        raise RuntimeError(
+            "Groq live briefing unavailable — MOCK_MODE is on. Set MOCK_MODE=false to enable."
         )
     if not settings.LIVE_LLM_ENABLED:
-        raise LiveModeDemoGateError(
-            "Live LLM demo locked — synthetic mode active. Set LIVE_LLM_ENABLED=true to unlock."
+        raise RuntimeError(
+            "Groq live briefing unavailable — LIVE_LLM_ENABLED is false. "
+            "Set LIVE_LLM_ENABLED=true in .env to enable."
         )
     if not settings.is_groq():
-        raise LiveModeDemoGateError(
-            "Live LLM demo locked — synthetic mode active. Set STRANDS_PROVIDER=groq to unlock."
+        raise RuntimeError(
+            f"Groq live briefing unavailable — STRANDS_PROVIDER is '{settings.STRANDS_PROVIDER}'. "
+            "Set STRANDS_PROVIDER=groq to enable."
         )
     if not settings.GROQ_API_KEY:
-        raise LiveModeDemoGateError(
-            "Live LLM demo locked — synthetic mode active. GROQ_API_KEY is not configured."
-        )
-    if not settings.LIVE_DEMO_ACCESS_CODE or operator_code != settings.LIVE_DEMO_ACCESS_CODE:
-        raise LiveModeDemoGateError(
-            "Live LLM demo locked — synthetic mode active. Access code not accepted."
+        raise RuntimeError(
+            "Groq live briefing unavailable — GROQ_API_KEY is not configured."
         )

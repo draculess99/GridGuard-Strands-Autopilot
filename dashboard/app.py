@@ -257,7 +257,6 @@ with st.sidebar:
     st.divider()
 
     confirm_live = False
-    operator_code_input = ""
 
     if settings.MOCK_MODE:
         st.markdown(
@@ -268,32 +267,16 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
     elif settings.is_groq():
-        if settings.LIVE_LLM_ENABLED and settings.GROQ_API_KEY:
-            st.markdown(
-                f'<div style="margin-bottom:0.75rem;padding:0.6rem;background:#1a0d2e;border:1px solid #6d28d9;border-radius:6px;font-size:0.75rem;color:#c4b5fd;">'
-                f'🔮 <strong>GROQ LIVE DEMO MODE</strong><br>'
-                f'Provider: <code>groq</code><br>'
-                f'Model: <code>{settings.GROQ_MODEL_ID}</code><br>'
-                f'Live calls: <strong>{get_live_run_count()} / {settings.LIVE_RUN_LIMIT}</strong><br>'
-                f'<em>Optional bounded demo. Not Bedrock, not AgentCore.<br>Does not control a real grid.</em>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-            operator_code_input = st.text_input(
-                "Demo access code",
-                value="",
-                type="password",
-                key="live_demo_access_code_input",
-                help="Enter the operator access code to unlock a live Groq demo run. Never shared or logged.",
-            )
-        else:
-            st.markdown(
-                '<div style="margin-bottom:0.75rem;padding:0.5rem;background:#0d2818;border:1px solid #1e4620;border-radius:6px;font-size:0.75rem;color:#86efac;">'
-                '🛡️ <strong>Live LLM demo locked — synthetic mode active.</strong><br>'
-                'LIVE_LLM_ENABLED or GROQ_API_KEY is not configured.'
-                '</div>',
-                unsafe_allow_html=True,
-            )
+        st.markdown(
+            f'<div style="margin-bottom:0.75rem;padding:0.6rem;background:#1a0d2e;border:1px solid #6d28d9;border-radius:6px;font-size:0.75rem;color:#c4b5fd;">'
+            f'🔮 <strong>GROQ LIVE DEMO MODE</strong><br>'
+            f'Provider: <code>groq</code><br>'
+            f'Model: <code>{settings.GROQ_MODEL_ID}</code><br>'
+            f'Live calls: <strong>{get_live_run_count()} / {settings.LIVE_RUN_LIMIT}</strong><br>'
+            f'<em>Optional bounded demo. Not Bedrock, not AgentCore.<br>Does not control a real grid.</em>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
     else:
         # Bedrock path (existing behaviour)
         fallback_html = f'<br>Fallback model: <code>{settings.BEDROCK_FALLBACK_MODEL_ID}</code>' if getattr(settings, "BEDROCK_FALLBACK_MODEL_ID", None) else ""
@@ -317,7 +300,7 @@ with st.sidebar:
     if settings.MOCK_MODE:
         mock_status_text = "Zero cloud API calls. Live Bedrock/Groq backend remains configurable."
     elif settings.is_groq():
-        mock_status_text = f"Optional Groq live demo path ({settings.GROQ_MODEL_ID}). Access-code gate required."
+        mock_status_text = f"Optional Groq live demo path ({settings.GROQ_MODEL_ID})."
     else:
         mock_status_text = "Live Bedrock calls enabled. Nova Lite is attempted first; Nova Micro is used once as fallback."
 
@@ -372,7 +355,7 @@ st.markdown("---")
 
 if run_btn:
     st.session_state.run_error = None
-    # Bedrock live gate — Groq uses its own access-code gate inside run_workflow
+    # Bedrock live gate
     if not settings.MOCK_MODE and not settings.is_groq() and not confirm_live:
         st.session_state.run_error = (
             "Live Bedrock invocation cancelled: Please check 'I confirm I want to call Amazon Bedrock' "
@@ -390,7 +373,6 @@ if run_btn:
                 result = run_workflow(
                     scenario,
                     mock_mode=settings.MOCK_MODE,
-                    operator_code=operator_code_input,
                 )
                 st.session_state.workflow_result = result
                 st.session_state.approval_token = result["approval_request"]["approval_token"]

@@ -341,28 +341,26 @@ def generate_groq_briefing(
     assessment: dict[str, Any],
     runbook: dict[str, Any],
     plan: dict[str, Any],
-    operator_code: str = "",
 ) -> dict[str, Any]:
     """
     Generate an evidence-grounded Operator Briefing using Groq via Strands OpenAIModel.
 
-    All five gate conditions must be satisfied before any API call is made:
+    All conditions must be satisfied before any API call is made:
       - MOCK_MODE=false
       - LIVE_LLM_ENABLED=true
       - STRANDS_PROVIDER=groq
       - GROQ_API_KEY non-empty
-      - correct LIVE_DEMO_ACCESS_CODE supplied by the operator
 
     This is a bounded single invocation (turns=1). It does not control any real grid.
     Groq is not Bedrock, AgentCore, or an AWS-hosted model.
     """
     from gridguard.safeguards import (
         increment_and_check_live_run_limit,
-        validate_live_demo_gate,
+        validate_groq_live_gate,
     )
 
-    # 1. Enforce multi-factor gate (raises LiveModeDemoGateError with safe message if blocked)
-    validate_live_demo_gate(operator_code)
+    # 1. Enforce gate (raises RuntimeError with safe message if blocked)
+    validate_groq_live_gate()
 
     # 2. Enforce process-level live-run ceiling
     increment_and_check_live_run_limit()
@@ -603,10 +601,6 @@ def run_workflow(
     if not mock_mode:
         try:
             if settings.is_groq():
-                # Groq path: caller must supply operator_code via kwargs if needed.
-                # In direct run_workflow calls the gate will refuse unless all
-                # conditions are met.  We pass an empty code here so the gate
-                # will block unless explicitly called from the UI with a valid code.
                 operator_briefing = generate_groq_briefing(
                     event=event,
                     snapshot=snapshot,
@@ -614,7 +608,6 @@ def run_workflow(
                     assessment=assessment,
                     runbook=runbook,
                     plan=plan,
-                    operator_code=kwargs.get("operator_code", ""),
                 )
             else:
                 operator_briefing = generate_live_briefing(
@@ -627,13 +620,16 @@ def run_workflow(
                 )
         except Exception as exc:
             log.error("Live briefing failed; continuing deterministic governance", extra={"error": str(exc)})
+            model_id = settings.GROQ_MODEL_ID if settings.is_groq() else settings.BEDROCK_MODEL_ID
+            source = "GROQ" if settings.is_groq() else "AMAZON_BEDROCK"
+            provider_name = "Groq" if settings.is_groq() else "Bedrock"
             operator_briefing = {
-                "source": "AMAZON_BEDROCK",
-                "model_id": settings.BEDROCK_MODEL_ID,
-                "region": settings.AWS_REGION,
+                "source": source,
+                "model_id": model_id,
+                "region": settings.AWS_REGION if not settings.is_groq() else None,
                 "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-                "briefing_text": f"Live Bedrock briefing unavailable: {str(exc)}",
-                "label": "Bedrock briefing failed — fallback to deterministic runbook.",
+                "briefing_text": f"Live {provider_name} briefing unavailable: {str(exc)}",
+                "label": f"{provider_name} briefing failed — fallback to deterministic runbook.",
                 "status": "FAILED",
                 "error": str(exc),
             }

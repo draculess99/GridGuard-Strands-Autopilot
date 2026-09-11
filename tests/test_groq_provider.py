@@ -13,8 +13,7 @@ import pytest
 # -- Helpers -------------------------------------------------------------------
 
 def _patch_for_groq(monkeypatch, *, mock_mode=False, live_llm_enabled=True,
-                    groq_key="gsk_testkey123", groq_model="openai/gpt-oss-20b",
-                    access_code="secret123"):
+                    groq_key="gsk_testkey123", groq_model="openai/gpt-oss-20b"):
     """Patch settings to simulate a fully-configured Groq live-mode environment."""
     from gridguard import config as cfg
     monkeypatch.setattr(cfg.settings, "MOCK_MODE", mock_mode)
@@ -22,7 +21,6 @@ def _patch_for_groq(monkeypatch, *, mock_mode=False, live_llm_enabled=True,
     monkeypatch.setattr(cfg.settings, "STRANDS_PROVIDER", "groq")
     monkeypatch.setattr(cfg.settings, "GROQ_API_KEY", groq_key)
     monkeypatch.setattr(cfg.settings, "GROQ_MODEL_ID", groq_model)
-    monkeypatch.setattr(cfg.settings, "LIVE_DEMO_ACCESS_CODE", access_code)
 
 
 # -- 1. Default settings remain mock mode -------------------------------------
@@ -47,7 +45,6 @@ def test_default_groq_api_key_is_empty(monkeypatch):
     assert fresh.GROQ_API_KEY == ""
 
 
-
 def test_is_groq_false_by_default():
     from gridguard.config import Settings
     fresh = Settings()
@@ -64,89 +61,61 @@ def test_is_groq_true_when_provider_set(monkeypatch):
 
 def test_gate_blocks_when_groq_key_missing(monkeypatch):
     from gridguard import config as cfg
-    from gridguard.safeguards import validate_live_demo_gate, LiveModeDemoGateError
+    from gridguard.safeguards import validate_groq_live_gate
     monkeypatch.setattr(cfg.settings, "MOCK_MODE", False)
     monkeypatch.setattr(cfg.settings, "LIVE_LLM_ENABLED", True)
     monkeypatch.setattr(cfg.settings, "STRANDS_PROVIDER", "groq")
     monkeypatch.setattr(cfg.settings, "GROQ_API_KEY", "")
-    monkeypatch.setattr(cfg.settings, "LIVE_DEMO_ACCESS_CODE", "secret")
-    with pytest.raises(LiveModeDemoGateError) as exc_info:
-        validate_live_demo_gate("secret")
+    with pytest.raises(RuntimeError) as exc_info:
+        validate_groq_live_gate()
     msg = str(exc_info.value)
-    assert "locked" in msg.lower() or "synthetic mode active" in msg.lower()
+    assert "GROQ_API_KEY is not configured" in msg
     assert "gsk_" not in msg
-    assert "secret" not in msg
 
 
-# -- 3. Wrong/missing access code cannot enable live mode ---------------------
-
-def test_gate_blocks_wrong_access_code(monkeypatch):
-    _patch_for_groq(monkeypatch, access_code="correct_code")
-    from gridguard.safeguards import validate_live_demo_gate, LiveModeDemoGateError
-    with pytest.raises(LiveModeDemoGateError) as exc_info:
-        validate_live_demo_gate("wrong_code")
-    msg = str(exc_info.value)
-    assert "locked" in msg.lower() or "synthetic mode active" in msg.lower()
-    assert "wrong_code" not in msg
-    assert "correct_code" not in msg
-
-
-def test_gate_blocks_empty_access_code(monkeypatch):
-    _patch_for_groq(monkeypatch, access_code="correct_code")
-    from gridguard.safeguards import validate_live_demo_gate, LiveModeDemoGateError
-    with pytest.raises(LiveModeDemoGateError):
-        validate_live_demo_gate("")
-
-
-def test_gate_blocks_when_server_code_not_configured(monkeypatch):
-    _patch_for_groq(monkeypatch, access_code="")
-    from gridguard.safeguards import validate_live_demo_gate, LiveModeDemoGateError
-    with pytest.raises(LiveModeDemoGateError):
-        validate_live_demo_gate("anything")
-
-
-# -- 4. Gate passes only when every condition is satisfied --------------------
+# -- 3. Gate passes only when every condition is satisfied --------------------
 
 def test_gate_passes_with_all_conditions_met(monkeypatch):
-    _patch_for_groq(monkeypatch, access_code="secret123")
-    from gridguard.safeguards import validate_live_demo_gate
-    validate_live_demo_gate("secret123")  # must not raise
+    _patch_for_groq(monkeypatch)
+    from gridguard.safeguards import validate_groq_live_gate
+    validate_groq_live_gate()  # must not raise
 
 
 def test_gate_blocks_when_mock_mode_true(monkeypatch):
-    _patch_for_groq(monkeypatch, mock_mode=True, access_code="secret123")
-    from gridguard.safeguards import validate_live_demo_gate, LiveModeDemoGateError
-    with pytest.raises(LiveModeDemoGateError):
-        validate_live_demo_gate("secret123")
+    _patch_for_groq(monkeypatch, mock_mode=True)
+    from gridguard.safeguards import validate_groq_live_gate
+    with pytest.raises(RuntimeError) as exc_info:
+        validate_groq_live_gate()
+    assert "MOCK_MODE is on" in str(exc_info.value)
 
 
 def test_gate_blocks_when_live_llm_not_enabled(monkeypatch):
-    _patch_for_groq(monkeypatch, live_llm_enabled=False, access_code="secret123")
-    from gridguard.safeguards import validate_live_demo_gate, LiveModeDemoGateError
-    with pytest.raises(LiveModeDemoGateError):
-        validate_live_demo_gate("secret123")
+    _patch_for_groq(monkeypatch, live_llm_enabled=False)
+    from gridguard.safeguards import validate_groq_live_gate
+    with pytest.raises(RuntimeError) as exc_info:
+        validate_groq_live_gate()
+    assert "LIVE_LLM_ENABLED is false" in str(exc_info.value)
 
 
 def test_gate_blocks_when_provider_not_groq(monkeypatch):
-    _patch_for_groq(monkeypatch, access_code="secret123")
+    _patch_for_groq(monkeypatch)
     from gridguard import config as cfg
     monkeypatch.setattr(cfg.settings, "STRANDS_PROVIDER", "bedrock")
-    from gridguard.safeguards import validate_live_demo_gate, LiveModeDemoGateError
-    with pytest.raises(LiveModeDemoGateError):
-        validate_live_demo_gate("secret123")
+    from gridguard.safeguards import validate_groq_live_gate
+    with pytest.raises(RuntimeError) as exc_info:
+        validate_groq_live_gate()
+    assert "STRANDS_PROVIDER is 'bedrock'" in str(exc_info.value)
 
 
-# -- 5. No secret appears in error messages or status text --------------------
+# -- 4. No secret appears in error messages or status text --------------------
 
 def test_no_secret_in_gate_error_messages(monkeypatch):
-    _patch_for_groq(monkeypatch, groq_key="gsk_supersecret9999", access_code="my_private_code")
-    from gridguard.safeguards import validate_live_demo_gate, LiveModeDemoGateError
-    with pytest.raises(LiveModeDemoGateError) as exc_info:
-        validate_live_demo_gate("wrong_attempt")
+    _patch_for_groq(monkeypatch, groq_key="gsk_supersecret9999", live_llm_enabled=False)
+    from gridguard.safeguards import validate_groq_live_gate
+    with pytest.raises(RuntimeError) as exc_info:
+        validate_groq_live_gate()
     msg = str(exc_info.value)
     assert "gsk_supersecret9999" not in msg
-    assert "my_private_code" not in msg
-    assert "wrong_attempt" not in msg
 
 
 def test_redact_secrets_covers_groq_key():
@@ -157,15 +126,7 @@ def test_redact_secrets_covers_groq_key():
     assert result["other"] == "visible"
 
 
-def test_redact_secrets_covers_live_demo_access_code():
-    from gridguard.safeguards import redact_secrets
-    payload = {"live_demo_access_code": "mycode", "provider": "groq"}
-    result = redact_secrets(payload)
-    assert result["live_demo_access_code"] == "[REDACTED]"
-    assert result["provider"] == "groq"
-
-
-# -- 6. Mock workflow is unaffected -------------------------------------------
+# -- 5. Mock workflow is unaffected -------------------------------------------
 
 def test_mock_workflow_unaffected_by_groq_config(monkeypatch):
     from gridguard import config as cfg
