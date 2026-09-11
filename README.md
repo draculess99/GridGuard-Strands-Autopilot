@@ -269,14 +269,19 @@ This project was built during the AWS Agents for Humans Hackathon submission per
 
 ## Screenshots
 
-- `00-local-dashboard-ready-strands-backend.png` — local dashboard ready; Strands backend configuration visible.
-- `01-local-tests-pass.png` — 71 offline tests passed.
-- `02-agentcore-deploy-start-script.png` — optional AWS Lambda deployment preparation started.
-- `02b-agentcore-prep-complete.png` — Lambda handler and CloudFormation deployment files prepared.
-- `03-aws-cloudformation-resources-update-complete.png` — direct AWS Console evidence: `gridguard-strands-agentcore-smoke` reached `UPDATE_COMPLETE` and shows the Lambda and IAM role resources.
-- `04-aws-lambda-smoke-test-success.png` — successful Lambda smoke test: `StatusCode: 200`, no `FunctionError`, and a structured action-group response.
-- `strands-backend-panel.png` — Strands SDK / Bedrock provider configuration with mock mode visible.
-- `workflow-approved-thumbnail.png` — completed workflow with human approval and audit record written.
+![Local dashboard and Strands backend](docs/images/00-local-dashboard-ready-strands-backend.png)
+
+![71 offline tests passing](docs/images/01-local-tests-pass.png)
+
+![Strands backend configuration](docs/images/strands-backend-panel.png)
+
+![Approved GridGuard workflow and audit record](docs/images/workflow-approved-thumbnail.png)
+
+![AWS CloudFormation Lambda resources updated successfully](docs/images/03-aws-cloudformation-resources-update-complete.png)
+
+![AWS Lambda action-group smoke test successful](docs/images/04-aws-lambda-smoke-test-success.png)
+
+The AWS screenshots document an optional internal Lambda action-group integration. They do not represent a public API, full GridGuard web deployment, or full AgentCore Runtime deployment.
 
 ---
 
